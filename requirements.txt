@@ -1,0 +1,5 @@
+streamlit
+st-gsheets-connection
+pandas
+xlsxwriter
+fpdf2
