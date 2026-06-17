@@ -7,14 +7,15 @@ from fpdf import FPDF
 
 # --- CONFIGURACIÓN DEPOSITARIA ---
 EMPLEADOS = [
-    "Edgar Galli",  # <-- AGREGADO
+    "Edgar Galli",  
     "Federico Hernandez",
     "Luciano Carucci",
     "Mario Javier Salvo",
     "Melina Luxen",
     "Veronica Marasi"
 ]
-ADMINS = ["Veronica Marasi"]
+# Edgar agregado como administrador
+ADMINS = ["Veronica Marasi", "Edgar Galli"]
 PASSWORD_ADMIN = "mariva2026" 
 
 st.set_page_config(page_title="Sistema de Guardias - Depositaria", layout="wide")
@@ -60,7 +61,7 @@ def generar_reporte_pdf():
     pdf.ln(10)
     
     for emp in EMPLEADOS:
-        if emp == "Edgar Galli": continue  # No procesamos al auditor en el PDF analítico
+        if emp == "Edgar Galli": continue  
         h_tot, d_uso, d_disp, h_rem = obtener_resumen(emp)
         emp_df = df[(df["Empleado"] == emp) & (df["Estado"] == "Aprobado")]
         
@@ -190,19 +191,21 @@ if user_sel != "Seleccionar...":
         c3.metric("Total Horas (Aprobadas)", f"{int(h_tot)} hs")
         c4.metric("Días Ya Tomados", f"{int(d_uso)}")
 
+    # Lógica dinámica de pestañas mediante diccionario
     if es_auditor:
         pest_nombres = ["📊 Resumen General del Sector"]
     else:
         pest_nombres = ["➕ Cargar Movimientos", "📜 Mi Historial"]
-        if auth_admin:
-            pest_nombres.insert(1, "📩 Validaciones Pendientes")
-            pest_nombres.append("📊 Reporte General")
+        
+    if auth_admin:
+        pest_nombres.append("📩 Validaciones Pendientes")
+        pest_nombres.append("📊 Reporte General")
     
     tabs = st.tabs(pest_nombres)
+    t_dict = dict(zip(pest_nombres, tabs))
 
-    # LÓGICA PARA EDGAR GALLI
-    if es_auditor:
-        with tabs[0]:
+    if "📊 Resumen General del Sector" in t_dict:
+        with t_dict["📊 Resumen General del Sector"]:
             st.subheader("📋 Resumen Consolidado de todo el Sector Depositaria")
             st.write("A continuación se muestra el estado actual y aprobado de cada integrante:")
             
@@ -219,9 +222,9 @@ if user_sel != "Seleccionar...":
                 })
             resumen_df = pd.DataFrame(resumen_data)
             st.dataframe(resumen_df, use_container_width=True, hide_index=True)
-            
-    else:
-        with tabs[0]:
+
+    if "➕ Cargar Movimientos" in t_dict:
+        with t_dict["➕ Cargar Movimientos"]:
             col_g, col_d = st.columns(2)
             with col_g:
                 st.subheader("Registrar Guardia")
@@ -246,37 +249,37 @@ if user_sel != "Seleccionar...":
                 else:
                     st.warning("No tenés saldo suficiente (mínimo 8hs aprobadas).")
 
-        if auth_admin:
-            with tabs[1]:
-                st.subheader("Trámites esperando resolución")
-                pendientes = df[df["Estado"].isin(["Pendiente", "Baja Pendiente"])].copy()
-                
-                if not pendientes.empty:
-                    for idx, row in pendientes.iterrows():
-                        with st.container(border=True):
-                            col_info, col_btn = st.columns([3, 1])
-                            accion = "ALTA" if row['Estado'] == "Pendiente" else "ELIMINACIÓN"
-                            col_info.write(f"**{row['Empleado']}** | {row['Fecha']} | {row['Tipo']} | Solicitud de **{accion}**")
-                            
-                            if row['Estado'] == "Pendiente":
-                                if col_btn.button(f"Aprobar Alta", key=f"app_{idx}"):
-                                    df.at[idx, "Estado"] = "Aprobado"
-                                    conn.update(data=df)
-                                    st.rerun()
-                            else: 
-                                if col_btn.button(f"Confirmar Borrado", key=f"del_{idx}"):
-                                    conn.update(data=df.drop(idx))
-                                    st.rerun()
-                            
-                            if col_btn.button(f"Rechazar", key=f"rej_{idx}"):
-                                df.at[idx, "Estado"] = "Aprobado" if row['Estado'] == "Baja Pendiente" else "Rechazado"
+    if "📩 Validaciones Pendientes" in t_dict:
+        with t_dict["📩 Validaciones Pendientes"]:
+            st.subheader("Trámites esperando resolución")
+            pendientes = df[df["Estado"].isin(["Pendiente", "Baja Pendiente"])].copy()
+            
+            if not pendientes.empty:
+                for idx, row in pendientes.iterrows():
+                    with st.container(border=True):
+                        col_info, col_btn = st.columns([3, 1])
+                        accion = "ALTA" if row['Estado'] == "Pendiente" else "ELIMINACIÓN"
+                        col_info.write(f"**{row['Empleado']}** | {row['Fecha']} | {row['Tipo']} | Solicitud de **{accion}**")
+                        
+                        if row['Estado'] == "Pendiente":
+                            if col_btn.button(f"Aprobar Alta", key=f"app_{idx}"):
+                                df.at[idx, "Estado"] = "Aprobado"
                                 conn.update(data=df)
                                 st.rerun()
-                else:
-                    st.info("No hay solicitudes pendientes.")
+                        else: 
+                            if col_btn.button(f"Confirmar Borrado", key=f"del_{idx}"):
+                                conn.update(data=df.drop(idx))
+                                st.rerun()
+                        
+                        if col_btn.button(f"Rechazar", key=f"rej_{idx}"):
+                            df.at[idx, "Estado"] = "Aprobado" if row['Estado'] == "Baja Pendiente" else "Rechazado"
+                            conn.update(data=df)
+                            st.rerun()
+            else:
+                st.info("No hay solicitudes pendientes.")
 
-        hist_idx = 2 if auth_admin else 1
-        with tabs[hist_idx]:
+    if "📜 Mi Historial" in t_dict:
+        with t_dict["📜 Mi Historial"]:
             st.write("Tus movimientos registrados:")
             u_df = df[df["Empleado"] == user_sel].copy()
             if not u_df.empty:
@@ -297,21 +300,21 @@ if user_sel != "Seleccionar...":
                         st.warning("Solicitud de eliminación enviada.")
                         st.rerun()
 
-        if auth_admin:
-            with tabs[-1]:
-                st.subheader("Descargar Informes del Sector")
-                
-                col_down1, col_down2 = st.columns(2)
-                with col_down1:
-                    buffer = io.BytesIO()
-                    with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                        df.to_excel(writer, index=False)
-                    st.download_button("📥 Descargar Reporte en Excel (Completo)", buffer.getvalue(), "reporte_guardias.xlsx", use_container_width=True)
-                
-                with col_down2:
-                    pdf_data = generar_reporte_pdf()
-                    st.download_button("📄 Descargar Reporte en PDF (Presentable)", pdf_data, f"reporte_guardias_{datetime.now().strftime('%d/%m/%Y')}.pdf", "application/pdf", use_container_width=True)
-                
-                st.markdown("---")
-                st.write("Vista previa global de la base de datos:")
-                st.dataframe(df, use_container_width=True)
+    if "📊 Reporte General" in t_dict:
+        with t_dict["📊 Reporte General"]:
+            st.subheader("Descargar Informes del Sector")
+            
+            col_down1, col_down2 = st.columns(2)
+            with col_down1:
+                buffer = io.BytesIO()
+                with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                    df.to_excel(writer, index=False)
+                st.download_button("📥 Descargar Reporte en Excel (Completo)", buffer.getvalue(), "reporte_guardias.xlsx", use_container_width=True)
+            
+            with col_down2:
+                pdf_data = generar_reporte_pdf()
+                st.download_button("📄 Descargar Reporte en PDF (Presentable)", pdf_data, f"reporte_guardias_{datetime.now().strftime('%d/%m/%Y')}.pdf", "application/pdf", use_container_width=True)
+            
+            st.markdown("---")
+            st.write("Vista previa global de la base de datos:")
+            st.dataframe(df, use_container_width=True)
