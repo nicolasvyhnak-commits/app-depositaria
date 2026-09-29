@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import datetime
 import io
 from fpdf import FPDF
+import altair as alt
 
 # --- CONFIGURACIÓN DEPOSITARIA ---
 EMPLEADOS = [
@@ -14,7 +15,6 @@ EMPLEADOS = [
     "Melina Luxen",
     "Veronica Marasi"
 ]
-# Edgar agregado como administrador
 ADMINS = ["Veronica Marasi", "Edgar Galli"]
 PASSWORD_ADMIN = "mariva2026" 
 
@@ -31,7 +31,7 @@ def cargar_datos():
 
 df = cargar_datos()
 
-# --- LÓGICA DE SALDOS ---
+# --- LÓGICA DE SALDOS Y MÉTRICAS ---
 def obtener_resumen(nombre):
     user_df = df[(df["Empleado"] == nombre) & (df["Estado"] == "Aprobado")]
     h_ganadas = user_df[user_df["Tipo"] == "Guardia"]["Horas"].sum()
@@ -40,6 +40,39 @@ def obtener_resumen(nombre):
     balance = h_ganadas - (d_usados * 8)
     return h_ganadas, d_usados, (balance // 8), (balance % 8)
 
+def obtener_metricas_guardias(nombre):
+    user_df = df[(df["Empleado"] == nombre) & (df["Estado"] == "Aprobado") & (df["Tipo"] == "Guardia")].copy()
+    if user_df.empty:
+        return 0, 0, 0
+    
+    user_df["Fecha_DT"] = pd.to_datetime(user_df["Fecha"], format="%d/%m/%Y", errors="coerce")
+    ahora = pd.to_datetime(datetime.now().strftime("%d/%m/%Y"), format="%d/%m/%Y")
+    dias_diff = (ahora - user_df["Fecha_DT"]).dt.days
+    
+    g30 = len(user_df[(dias_diff >= 0) & (dias_diff <= 30)])
+    g60 = len(user_df[(dias_diff >= 0) & (dias_diff <= 60)])
+    g90 = len(user_df[(dias_diff >= 0) & (dias_diff <= 90)])
+    
+    return g30, g60, g90
+
+def generar_dataframe_resumen():
+    resumen_data = []
+    for emp in EMPLEADOS:
+        if emp == "Edgar Galli": continue
+        h_t, d_u, d_d, h_r = obtener_resumen(emp)
+        g30, g60, g90 = obtener_metricas_guardias(emp)
+        resumen_data.append({
+            "Empleado": emp,
+            "Días Disponibles": int(d_d),
+            "Horas p/ próximo día": f"{int(h_r)}/8 hs",
+            "Días ya Usados": int(d_u),
+            "Total Horas Extra": f"{int(h_t)} hs",
+            "Guardias (30d)": g30,
+            "Guardias (60d)": g60,
+            "Guardias (90d)": g90
+        })
+    return pd.DataFrame(resumen_data)
+
 # --- FUNCIÓN PARA GENERAR PDF REPORTE DETALLADO ---
 def clean_txt(text):
     replacements = {"á": "a", "é": "e", "í": "i", "ó": "o", "ú": "u", "ñ": "n", "Ñ": "N", "Á": "A", "É": "E", "Í": "I", "Ó": "O", "Ú": "U"}
@@ -47,23 +80,33 @@ def clean_txt(text):
         text = text.replace(search, replace)
     return text.encode('latin-1', 'ignore').decode('latin-1')
 
-def generar_reporte_pdf():
+def generar_reporte_pdf(empleado_filtro=None):
     pdf = FPDF()
     pdf.add_page()
     
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(20, 50, 100) 
-    pdf.cell(0, 10, clean_txt("REPORTE DE GUARDIAS - SECTOR DEPOSITARIA"), ln=True, align="C")
     
+    if empleado_filtro:
+        pdf.cell(0, 10, clean_txt(f"REPORTE INDIVIDUAL - {empleado_filtro.upper()}"), ln=True, align="C")
+    else:
+        pdf.cell(0, 10, clean_txt("REPORTE DE GUARDIAS - SECTOR DEPOSITARIA"), ln=True, align="C")
+        
     pdf.set_font("Helvetica", "I", 10)
     pdf.set_text_color(100, 100, 100)
     pdf.cell(0, 6, f"Fecha de emision: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=True, align="C")
     pdf.ln(10)
     
-    for emp in EMPLEADOS:
-        if emp == "Edgar Galli": continue  
+    empleados_a_procesar = [empleado_filtro] if empleado_filtro else [e for e in EMPLEADOS if e != "Edgar Galli"]
+    
+    for emp in empleados_a_procesar:
         h_tot, d_uso, d_disp, h_rem = obtener_resumen(emp)
-        emp_df = df[(df["Empleado"] == emp) & (df["Estado"] == "Aprobado")]
+        emp_df = df[(df["Empleado"] == emp) & (df["Estado"] == "Aprobado")].copy()
+        
+        # ORDENAMIENTO CRONOLÓGICO POR AÑO-MES-DÍA
+        emp_df["Fecha_DT"] = pd.to_datetime(emp_df["Fecha"], format="%d/%m/%Y", errors="coerce")
+        emp_df = emp_df.sort_values(by="Fecha_DT", ascending=False)
+        emp_df["Fecha_Fmt"] = emp_df["Fecha_DT"].dt.strftime("%Y-%m-%d").fillna(emp_df["Fecha"])
         
         pdf.set_font("Helvetica", "B", 13)
         pdf.set_text_color(20, 50, 100)
@@ -83,25 +126,34 @@ def generar_reporte_pdf():
         pdf.cell(45, 6, f"{int(h_rem)}/8 hs", border=1, align="C")
         pdf.cell(45, 6, str(int(d_uso)), border=1, align="C")
         pdf.cell(45, 6, f"{int(h_tot)} hs", border=1, align="C")
-        pdf.ln(8)
+        pdf.ln(6)
+        
+        # NUEVAS MÉTRICAS 30/60/90 DÍAS EN EL PDF
+        g30, g60, g90 = obtener_metricas_guardias(emp)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_text_color(40, 90, 150)
+        pdf.cell(10, 6, "", ln=False)
+        pdf.cell(0, 6, clean_txt(f"> Actividad Reciente: {g30} guardias (30 dias) | {g60} guardias (60 dias) | {g90} guardias (90 dias)"), ln=True)
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(4)
         
         guardias = emp_df[emp_df["Tipo"] == "Guardia"]
         pdf.set_font("Helvetica", "B", 10)
         pdf.set_text_color(60, 60, 60)
-        pdf.cell(0, 6, clean_txt("   > Detalle de Guardias Realizadas:"), ln=True)
+        pdf.cell(0, 6, clean_txt("   > Detalle Cronologico de Guardias Realizadas:"), ln=True)
         
         if not guardias.empty:
             pdf.set_font("Helvetica", "B", 9)
             pdf.set_fill_color(235, 235, 235)
             pdf.cell(10, 6, "", ln=False) 
-            pdf.cell(60, 6, clean_txt("Fecha de la Guardia"), border=1, fill=True, align="C")
+            pdf.cell(60, 6, clean_txt("Fecha (Año-Mes-Dia)"), border=1, fill=True, align="C")
             pdf.cell(60, 6, clean_txt("Horas Computadas"), border=1, fill=True, align="C")
             pdf.ln()
             
             pdf.set_font("Helvetica", "", 9)
             for _, row in guardias.iterrows():
                 pdf.cell(10, 6, "", ln=False)
-                pdf.cell(60, 6, clean_txt(row["Fecha"]), border=1, align="C")
+                pdf.cell(60, 6, clean_txt(row["Fecha_Fmt"]), border=1, align="C")
                 pdf.cell(60, 6, f"+{row['Horas']} hs", border=1, align="C")
                 pdf.ln()
         else:
@@ -116,7 +168,7 @@ def generar_reporte_pdf():
         dias_tomados = emp_df[emp_df["Tipo"] == "Día Tomado"]
         pdf.set_font("Helvetica", "B", 10)
         pdf.set_text_color(60, 60, 60)
-        pdf.cell(0, 6, clean_txt("   > Detalle de Dias Compensatorios Tomados:"), ln=True)
+        pdf.cell(0, 6, clean_txt("   > Detalle Cronologico de Dias Tomados:"), ln=True)
         
         if not dias_tomados.empty:
             pdf.set_font("Helvetica", "B", 9)
@@ -129,7 +181,7 @@ def generar_reporte_pdf():
             pdf.set_font("Helvetica", "", 9)
             for _, row in dias_tomados.iterrows():
                 pdf.cell(10, 6, "", ln=False)
-                pdf.cell(60, 6, clean_txt(row["Fecha"]), border=1, align="C")
+                pdf.cell(60, 6, clean_txt(row["Fecha_Fmt"]), border=1, align="C")
                 pdf.cell(60, 6, clean_txt(row["Tipo"]), border=1, align="C")
                 pdf.ln()
         else:
@@ -163,7 +215,7 @@ if user_sel != "Seleccionar...":
         st.session_state["admin_logueado"] = False
 
     if es_admin and not st.session_state["admin_logueado"]:
-        with st.expander("🔐 Administrador", expanded=True):
+        with st.expander("🔐 Administrador / Auditoría", expanded=True):
             pass_input = st.text_input("Contraseña de seguridad:", type="password")
             if st.button("Ingresar Sistema"):
                 if pass_input == PASSWORD_ADMIN:
@@ -176,7 +228,7 @@ if user_sel != "Seleccionar...":
     auth_admin = st.session_state["admin_logueado"] if es_admin else False
 
     if auth_admin:
-        if st.button("🔒 Salir de Modo Administrador"):
+        if st.button("🔒 Salir del Modo Seguro"):
             st.session_state["admin_logueado"] = False
             st.rerun()
 
@@ -191,9 +243,8 @@ if user_sel != "Seleccionar...":
         c3.metric("Total Horas (Aprobadas)", f"{int(h_tot)} hs")
         c4.metric("Días Ya Tomados", f"{int(d_uso)}")
 
-    # Lógica dinámica de pestañas mediante diccionario
     if es_auditor:
-        pest_nombres = ["📊 Resumen General del Sector"]
+        pest_nombres = ["📊 Panel de Auditoría Analítica"]
     else:
         pest_nombres = ["➕ Cargar Movimientos", "📜 Mi Historial"]
         
@@ -204,25 +255,117 @@ if user_sel != "Seleccionar...":
     tabs = st.tabs(pest_nombres)
     t_dict = dict(zip(pest_nombres, tabs))
 
-    if "📊 Resumen General del Sector" in t_dict:
-        with t_dict["📊 Resumen General del Sector"]:
-            st.subheader("📋 Resumen Consolidado de todo el Sector Depositaria")
-            st.write("A continuación se muestra el estado actual y aprobado de cada integrante:")
+    # --- PANEL EXCLUSIVO PARA EDGAR GALLI ---
+    if "📊 Panel de Auditoría Analítica" in t_dict:
+        with t_dict["📊 Panel de Auditoría Analítica"]:
+            filtro_edgar = st.selectbox("🔎 Filtrar vista por empleado:", ["Todos los empleados (Vista Global)"] + [e for e in sorted(EMPLEADOS) if e != "Edgar Galli"])
+            st.markdown("---")
             
-            resumen_data = []
-            for emp in EMPLEADOS:
-                if emp == "Edgar Galli": continue
-                h_t, d_u, d_d, h_r = obtener_resumen(emp)
-                resumen_data.append({
-                    "Empleado": emp,
-                    "Días Disponibles": int(d_d),
-                    "Horas para próximo día": f"{int(h_r)}/8 hs",
-                    "Días ya Usados": int(d_u),
-                    "Total Horas Extra": f"{int(h_t)} hs"
-                })
-            resumen_df = pd.DataFrame(resumen_data)
-            st.dataframe(resumen_df, use_container_width=True, hide_index=True)
+            if filtro_edgar == "Todos los empleados (Vista Global)":
+                st.subheader("📋 Resumen Consolidado del Sector Depositaria")
+                df_resumen = generar_dataframe_resumen()
+                st.dataframe(df_resumen, use_container_width=True, hide_index=True)
+                
+                st.markdown("---")
+                st.subheader("📥 Descargar Reportes Globales")
+                
+                df_export = df.copy()
+                df_export["Fecha_DT"] = pd.to_datetime(df_export["Fecha"], format="%d/%m/%Y", errors="coerce")
+                df_export = df_export.sort_values(by="Fecha_DT", ascending=False)
+                df_export["Fecha"] = df_export["Fecha_DT"].dt.strftime("%Y-%m-%d").fillna(df_export["Fecha"])
+                df_export = df_export.drop(columns=["Fecha_DT"])
+                
+                c_g1, c_g2 = st.columns(2)
+                with c_g1:
+                    buffer = io.BytesIO()
+                    with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                        df_resumen.to_excel(writer, sheet_name="Resumen de Metricas", index=False)
+                        df_export.to_excel(writer, sheet_name="Detalle de Movimientos", index=False)
+                    st.download_button("📥 Excel Global", buffer.getvalue(), f"Depositaria_Global_{datetime.now().strftime('%Y-%m-%d')}.xlsx", use_container_width=True)
+                with c_g2:
+                    pdf_data = generar_reporte_pdf()
+                    st.download_button("📄 PDF Global", pdf_data, f"Depositaria_Global_{datetime.now().strftime('%Y-%m-%d')}.pdf", "application/pdf", use_container_width=True)
 
+            else:
+                h_t_ind, d_u_ind, d_d_ind, h_r_ind = obtener_resumen(filtro_edgar)
+                st.markdown(f"### 🎯 Análisis de Desempeño: {filtro_edgar}")
+                
+                c_m1, c_m2, c_m3, c_m4 = st.columns(4)
+                c_m1.metric("Días Disponibles", int(d_d_ind))
+                c_m2.metric("Horas p/ Próximo Día", f"{int(h_r_ind)}/8 hs")
+                c_m3.metric("Total Horas Acumuladas", f"{int(h_t_ind)} hs")
+                c_m4.metric("Días Usados", int(d_u_ind))
+                
+                col_chart, col_data = st.columns([1, 1.5])
+                
+                with col_chart:
+                    st.write("**📈 Balance de Productividad**")
+                    horas_consumidas = int(d_u_ind * 8)
+                    horas_disponibles = int(h_t_ind) - horas_consumidas
+                    
+                    if int(h_t_ind) > 0:
+                        source = pd.DataFrame({
+                            "Estado": ["Horas Disponibles", "Horas Consumidas"],
+                            "Valor": [horas_disponibles, horas_consumidas]
+                        })
+                        chart = alt.Chart(source).mark_arc(innerRadius=40).encode(
+                            theta=alt.Theta(field="Valor", type="quantitative"),
+                            color=alt.Color(field="Estado", type="nominal", scale=alt.Scale(range=['#2ca02c', '#d62728'])),
+                            tooltip=["Estado", "Valor"]
+                        ).properties(height=250)
+                        st.altair_chart(chart, use_container_width=True)
+                    else:
+                        st.info("Sin horas cargadas para graficar.")
+                        
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    g30, g60, g90 = obtener_metricas_guardias(filtro_edgar)
+                    st.success(f"🔥 **{g30} guardias** en los últimos 30 días.")
+                    st.info(f"📅 **{g60} guardias** en los últimos 60 días.")
+                    st.warning(f"📊 **{g90} guardias** en los últimos 90 días.")
+
+                with col_data:
+                    st.write("**📅 Historial Completo (Orden Año-Mes-Día)**")
+                    user_df = df[(df["Empleado"] == filtro_edgar) & (df["Estado"] == "Aprobado")].copy()
+                    if not user_df.empty:
+                        user_df["Fecha_DT"] = pd.to_datetime(user_df["Fecha"], format="%d/%m/%Y", errors="coerce")
+                        user_df = user_df.sort_values(by="Fecha_DT", ascending=False)
+                        user_df["Fecha"] = user_df["Fecha_DT"].dt.strftime("%Y-%m-%d").fillna(user_df["Fecha"])
+                        st.dataframe(user_df[["Fecha", "Tipo", "Horas", "Estado"]], use_container_width=True, hide_index=True)
+                    else:
+                        st.write("El usuario no registra movimientos aprobados.")
+                        
+                st.markdown("---")
+                st.subheader(f"📥 Descargar Reportes Exclusivos de {filtro_edgar}")
+                
+                df_indiv = df[df["Empleado"] == filtro_edgar].copy()
+                df_indiv["Fecha_DT"] = pd.to_datetime(df_indiv["Fecha"], format="%d/%m/%Y", errors="coerce")
+                df_indiv = df_indiv.sort_values(by="Fecha_DT", ascending=False)
+                df_indiv["Fecha"] = df_indiv["Fecha_DT"].dt.strftime("%Y-%m-%d").fillna(df_indiv["Fecha"])
+                df_indiv = df_indiv.drop(columns=["Fecha_DT"])
+                
+                df_resumen_indiv = pd.DataFrame([{
+                    "Empleado": filtro_edgar,
+                    "Días Disponibles": int(d_d_ind),
+                    "Horas p/ próximo día": f"{int(h_r_ind)}/8 hs",
+                    "Días ya Usados": int(d_u_ind),
+                    "Total Horas Extra": f"{int(h_t_ind)} hs",
+                    "Guardias (30d)": g30,
+                    "Guardias (60d)": g60,
+                    "Guardias (90d)": g90
+                }])
+                
+                c_i1, c_i2 = st.columns(2)
+                with c_i1:
+                    buffer = io.BytesIO()
+                    with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                        df_resumen_indiv.to_excel(writer, sheet_name="Resumen de Metricas", index=False)
+                        df_indiv.to_excel(writer, sheet_name="Detalle de Movimientos", index=False)
+                    st.download_button("📥 Excel Individual", buffer.getvalue(), f"Reporte_{filtro_edgar.replace(' ', '_')}.xlsx", use_container_width=True)
+                with c_i2:
+                    pdf_indiv = generar_reporte_pdf(filtro_edgar)
+                    st.download_button("📄 PDF Individual", pdf_indiv, f"Reporte_{filtro_edgar.replace(' ', '_')}.pdf", "application/pdf", use_container_width=True)
+
+    # --- RESTO DE PESTAÑAS (CARGA, VALIDACIONES, REPORTE ADMIN NORMAL) ---
     if "➕ Cargar Movimientos" in t_dict:
         with t_dict["➕ Cargar Movimientos"]:
             col_g, col_d = st.columns(2)
@@ -255,6 +398,10 @@ if user_sel != "Seleccionar...":
             pendientes = df[df["Estado"].isin(["Pendiente", "Baja Pendiente"])].copy()
             
             if not pendientes.empty:
+                pendientes["Fecha_DT"] = pd.to_datetime(pendientes["Fecha"], format="%d/%m/%Y", errors="coerce")
+                pendientes = pendientes.sort_values(by="Fecha_DT", ascending=False)
+                pendientes["Fecha"] = pendientes["Fecha_DT"].dt.strftime("%Y-%m-%d").fillna(pendientes["Fecha"])
+                
                 for idx, row in pendientes.iterrows():
                     with st.container(border=True):
                         col_info, col_btn = st.columns([3, 1])
@@ -283,9 +430,15 @@ if user_sel != "Seleccionar...":
             st.write("Tus movimientos registrados:")
             u_df = df[df["Empleado"] == user_sel].copy()
             if not u_df.empty:
-                st.dataframe(u_df[["Fecha", "Tipo", "Horas", "Estado"]], use_container_width=True)
+                u_df["Fecha_DT"] = pd.to_datetime(u_df["Fecha"], format="%d/%m/%Y", errors="coerce")
+                u_df = u_df.sort_values(by="Fecha_DT", ascending=False)
+                u_df["Fecha_Mostrar"] = u_df["Fecha_DT"].dt.strftime("%Y-%m-%d").fillna(u_df["Fecha"])
+                
+                df_mostrar = u_df[["Fecha_Mostrar", "Tipo", "Horas", "Estado"]].rename(columns={"Fecha_Mostrar": "Fecha"})
+                st.dataframe(df_mostrar, use_container_width=True)
+                
                 u_df['ID'] = u_df.index
-                opciones = u_df.apply(lambda x: f"ID:{x['ID']} | {x['Fecha']} | {x['Tipo']} ({x['Estado']})", axis=1).tolist()
+                opciones = u_df.apply(lambda x: f"ID:{x['ID']} | {x['Fecha_Mostrar']} | {x['Tipo']} ({x['Estado']})", axis=1).tolist()
                 st.markdown("---")
                 borrar = st.selectbox("Seleccioná un registro para anular:", opciones)
                 
@@ -304,17 +457,26 @@ if user_sel != "Seleccionar...":
         with t_dict["📊 Reporte General"]:
             st.subheader("Descargar Informes del Sector")
             
+            df_export = df.copy()
+            df_export["Fecha_DT"] = pd.to_datetime(df_export["Fecha"], format="%d/%m/%Y", errors="coerce")
+            df_export = df_export.sort_values(by="Fecha_DT", ascending=False)
+            df_export["Fecha"] = df_export["Fecha_DT"].dt.strftime("%Y-%m-%d").fillna(df_export["Fecha"])
+            df_export = df_export.drop(columns=["Fecha_DT"])
+            
+            df_resumen = generar_dataframe_resumen()
+            
             col_down1, col_down2 = st.columns(2)
             with col_down1:
                 buffer = io.BytesIO()
                 with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                    df.to_excel(writer, index=False)
-                st.download_button("📥 Descargar Reporte en Excel (Completo)", buffer.getvalue(), "reporte_guardias.xlsx", use_container_width=True)
+                    df_resumen.to_excel(writer, sheet_name="Resumen de Metricas", index=False)
+                    df_export.to_excel(writer, sheet_name="Detalle de Movimientos", index=False)
+                st.download_button("📥 Descargar Reporte en Excel (Completo)", buffer.getvalue(), "reporte_depositaria.xlsx", use_container_width=True)
             
             with col_down2:
                 pdf_data = generar_reporte_pdf()
-                st.download_button("📄 Descargar Reporte en PDF (Presentable)", pdf_data, f"reporte_guardias_{datetime.now().strftime('%d/%m/%Y')}.pdf", "application/pdf", use_container_width=True)
+                st.download_button("📄 Descargar Reporte en PDF (Presentable)", pdf_data, f"reporte_depositaria_{datetime.now().strftime('%Y-%m-%d')}.pdf", "application/pdf", use_container_width=True)
             
             st.markdown("---")
             st.write("Vista previa global de la base de datos:")
-            st.dataframe(df, use_container_width=True)
+            st.dataframe(df_export, use_container_width=True)
