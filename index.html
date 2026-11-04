@@ -248,11 +248,23 @@ function renderConsejos(){
     var by={};M.forEach(function(m){var k=(m.description||'(sin descripción)')+'|'+(m.currency||'');var o=by[k]||(by[k]={d:m.description||'(sin descripción)',c:m.currency||'',n:0,s:0});o.n++;o.s+=Number(m.amount)||0});
     h+='<h2>Movimientos del último año</h2><p class="m">Son los movimientos que informa PPI ('+M.length+'). Agrupados por tipo:</p><div class="c">';
     Object.keys(by).sort().forEach(function(k){var o=by[k];h+='<div class="r"><span>'+esc(o.d)+' <span class="m">('+o.n+')</span></span><b>'+f2(o.s)+'</b></div>'});
-    h+='</div><details><summary>Ver todos, del más nuevo al más viejo</summary>';
+    h+='</div><button class="btn p" id="copyMov">Copiar todos los movimientos</button><p id="copyMovMsg" class="m" hidden></p><textarea id="copyMovBox" readonly hidden></textarea><details><summary>Ver todos, del más nuevo al más viejo</summary>';
     M.slice().sort(function(x,y){return String(y.agreementDate).localeCompare(String(x.agreementDate))}).forEach(function(m){
       h+='<div class="c" style="margin-top:8px"><div class="r"><span class="t">'+esc(m.ticker||'')+'</span><b>'+f2(m.amount)+' '+esc(m.currency||'')+'</b></div><p class="m">'+esc(m.description||'')+'</p><p class="m">'+esc(String(m.agreementDate||'').slice(0,10))+(m.quantity?' · cantidad '+f2(m.quantity):'')+(m.price?' · precio '+f2(m.price):'')+'</p></div>'});
     h+='</details>'}
   $('v-consejos').innerHTML=h;$('copyBtn2').onclick=function(){copySummary(2)};
+  if($('copyMov'))$('copyMov').onclick=copyMov;
+}
+function movText(){
+  var L=['Movimientos de mi cuenta en PPI (último año), del más nuevo al más viejo. Columnas: fecha | liquidación | código | descripción | cantidad | precio | monto | moneda | saldo'];
+  M.slice().sort(function(x,y){return String(y.agreementDate).localeCompare(String(x.agreementDate))}).forEach(function(m){
+    L.push([String(m.agreementDate||'').slice(0,10),String(m.settlementDate||'').slice(0,10),m.ticker||'',m.description||'',m.quantity!=null?m.quantity:'',m.price!=null?m.price:'',m.amount!=null?m.amount:'',m.currency||'',m.balance!=null?m.balance:''].join(' | '))});
+  return L.join('\n');
+}
+function copyMov(){
+  var txt=movText(),box=$('copyMovBox'),msg=$('copyMovMsg');msg.hidden=false;
+  function fb(){box.value=txt;box.hidden=false;box.focus();box.select();msg.textContent='Seleccioná el texto de abajo y copialo.'}
+  try{navigator.clipboard.writeText(txt).then(function(){box.hidden=true;msg.textContent='Copiado ('+M.length+' movimientos). Pegalo en el chat.'},fb)}catch(e){fb()}
 }
 function summary(){
   var T=totals(),L=['Mi cartera en PPI ('+new Date().toLocaleDateString('es-AR')+'):'];
