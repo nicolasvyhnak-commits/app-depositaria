@@ -30,8 +30,8 @@ details{font-size:14px;color:var(--mut)}summary{cursor:pointer;color:var(--acc);
 details p{margin-top:6px}
 .bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden}.bar i{display:block;height:100%;background:var(--acc)}
 .tabs{position:fixed;left:0;right:0;bottom:0;background:var(--s);border-top:1px solid var(--line);padding:0 max(8px,env(safe-area-inset-right)) env(safe-area-inset-bottom) max(8px,env(safe-area-inset-left))}
-.tabs div{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr)}
-.tabs a{text-align:center;padding:13px 2px 11px;font-size:12px;font-weight:600;color:var(--mut);text-decoration:none;border-top:3px solid transparent}
+.tabs div{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(6,1fr)}
+.tabs a{text-align:center;padding:13px 0 11px;font-size:11px;font-weight:600;color:var(--mut);text-decoration:none;border-top:3px solid transparent}
 .tabs a.on{color:var(--acc);border-top-color:var(--acc)}
 [hidden]{display:none!important}
 </style>
@@ -43,10 +43,11 @@ details p{margin-top:6px}
   <section id="v-posiciones" class="w" data-v="posiciones" hidden></section>
   <section id="v-vender" class="w" data-v="vender" hidden></section>
   <section id="v-reparto" class="w" data-v="reparto" hidden></section>
+  <section id="v-metas" class="w" data-v="metas" hidden></section>
   <section id="v-consejos" class="w" data-v="consejos" hidden></section>
 </div>
 <nav class="tabs"><div>
-  <a href="#resumen" data-t="resumen">Resumen</a><a href="#posiciones" data-t="posiciones">Tenés</a><a href="#vender" data-t="vender">Vender</a><a href="#reparto" data-t="reparto">Reparto</a><a href="#consejos" data-t="consejos">Consejos</a>
+  <a href="#resumen" data-t="resumen">Resumen</a><a href="#posiciones" data-t="posiciones">Tenés</a><a href="#vender" data-t="vender">Vender</a><a href="#reparto" data-t="reparto">Reparto</a><a href="#metas" data-t="metas">Metas</a><a href="#consejos" data-t="consejos">Consejos</a>
 </div></nav>
 <script>
 (function(){
@@ -68,9 +69,11 @@ function parse(s){if(s==null)return NaN;var t=String(s).trim().replace(/\s|\$/g,
   else if(/^[1-9]\d{0,2}(\.\d{3})+$/.test(t))t=t.replace(/\./g,'');var n=Number(t);return isFinite(n)?n:NaN}
 
 /* ---- estado guardado en este celular ---- */
-function defState(){return {budget:4000000,comPct:0.7865,usd:null,obj:{SPY:50,MSFT:10,GOOGL:10,V:10,JNJ:10,KO:10},prices:{}}}
+function defState(){return {budget:4000000,comPct:0.7865,usd:null,obj:{SPY:50,MSFT:10,GOOGL:10,V:10,JNJ:10,KO:10},prices:{},meta:defMeta()}}
+function defMeta(){return {debt:3000,monthly:50,pays:[],resAmt:500,resDate:'2027-01-15'}}
 var S=defState();
 try{var raw=localStorage.getItem(KEY);if(raw){var o=JSON.parse(raw);S=Object.assign(defState(),o)}}catch(e){}
+S.meta=Object.assign(defMeta(),S.meta||{});if(!Array.isArray(S.meta.pays))S.meta.pays=[];
 if(S.comV!==3){S.comV=3;S.comPct=0.7865}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 
@@ -319,6 +322,7 @@ function summary(){
   L.push('Resultado total estimado: '+sg(T.res)+'. Plata total: '+ars(T.patr)+'.');
   var o=Object.keys(S.obj).filter(function(t){return S.obj[t]>0}).map(function(t){return t+' '+S.obj[t]+'%'});
   if(o.length)L.push('Reparto objetivo en CEDEARs ($'+f0(S.budget)+'): '+o.join(', ')+'.');
+  var d=debtState();L.push('Deuda con mi mamá: debía '+usd(S.meta.debt)+', devolví '+usd(d.paid)+', faltan '+usd(d.left)+'; cuota '+usd(S.meta.monthly)+' por mes. Reserva para el alquiler: '+usd(S.meta.resAmt)+' para el '+fdate(S.meta.resDate)+'.');
   L.push('','Buscá noticias actuales y contame novedades y riesgos de cada una de estas inversiones y del dólar, y cómo podrían afectar mi cartera. No quiero una orden de comprar o vender: quiero entender el panorama.');
   return L.join('\n');
 }
@@ -327,9 +331,51 @@ function copySummary(k){
   function fb(){box.value=txt;box.hidden=false;box.focus();box.select();msg.textContent='Seleccioná el texto de abajo y copialo.'}
   try{navigator.clipboard.writeText(txt).then(function(){box.hidden=true;msg.textContent='Copiado. Pegalo en un chat con Claude.'},fb)}catch(e){fb()}
 }
-function renderAll(){renderResumen();renderPos();renderVender();renderReparto();renderConsejos()}
+/* ---- Metas: deuda con mamá y reserva de enero (se guarda en este celular) ---- */
+function todayStr(){var d=new Date();return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2)}
+function fdate(s){var p=String(s||'').split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:'—'}
+function usdCash(){var t=0;cash.forEach(function(c){if(c.cur==='USD')t+=c.amount});return t}
+function debtState(){
+  var m=S.meta,paid=0;m.pays.forEach(function(p){paid+=Number(p.u)||0});
+  var left=Math.max(0,m.debt-paid),months=m.monthly>0?Math.ceil(left/m.monthly):null;
+  var end=null;if(months!=null&&left>0){end=new Date();end.setMonth(end.getMonth()+months)}
+  return {paid:paid,left:left,months:months,end:end};
+}
+function renderMetas(){
+  var m=S.meta,d=debtState(),pct=m.debt>0?Math.min(100,d.paid/m.debt*100):0;
+  var h='<h2>Mis metas</h2><p class="m">Esto lo cargás vos y queda guardado en este celular. No viene de PPI.</p>';
+  h+='<div class="c"><h3>Deuda con mamá</h3>';
+  h+='<div class="r"><span>Devuelto</span><b class="g">'+usd(d.paid)+'</b></div><div class="r"><span>Falta devolver</span><b>'+usd(d.left)+'</b></div>';
+  h+='<div class="bar"><i style="width:'+pct.toFixed(1)+'%"></i></div><p class="m">'+f2(pct)+'% devuelto de '+usd(m.debt)+'.</p>';
+  if(d.left<=0)h+='<p class="info">¡Deuda devuelta!</p>';
+  else if(d.months!=null)h+='<p class="info">Con '+usd(m.monthly)+' por mes, te faltan <b>'+d.months+' meses</b> (hasta '+d.end.toLocaleDateString('es-AR',{month:'long',year:'numeric'})+').</p>';
+  else h+='<p class="note">Poné una cuota mensual para calcular el plazo.</p>';
+  h+='<div class="two"><label>Cuánto debías (US$)<input id="mDebt" inputmode="decimal" value="'+fi(m.debt)+'"></label><label>Cuota por mes (US$)<input id="mMonthly" inputmode="decimal" value="'+fi(m.monthly)+'"></label></div>';
+  h+='<div class="two"><label>Pago que hiciste (US$)<input id="mPay" inputmode="decimal" placeholder="50"></label><button class="btn p" id="mAdd" style="align-self:end">Anotar pago de hoy</button></div>';
+  if(m.pays.length){h+='<details><summary>Ver pagos ('+m.pays.length+')</summary>';
+    m.pays.slice().reverse().forEach(function(p,i){var idx=m.pays.length-1-i;h+='<div class="r" style="margin-top:8px"><span>'+fdate(p.d)+'</span><b>'+usd(p.u)+'</b><button class="btn" data-del="'+idx+'" aria-label="Borrar pago" style="min-height:36px;padding:4px 12px">✕</button></div>'});
+    h+='</details>'}
+  h+='</div>';
+  var have=D?usdCash():null,days=Math.ceil((new Date(m.resDate+'T12:00:00')-new Date())/86400000);
+  h+='<div class="c"><h3>Reserva para el alquiler de enero</h3>';
+  h+='<div class="two"><label>Monto (US$)<input id="rAmt" inputmode="decimal" value="'+fi(m.resAmt)+'"></label><label>Fecha en que la necesitás<input id="rDate" type="date" value="'+esc(m.resDate)+'"></label></div>';
+  if(isFinite(days))h+='<p class="m">'+(days>0?'Faltan '+days+' días ('+fdate(m.resDate)+').':'La fecha ya pasó.')+'</p>';
+  if(have!=null){var extra=have-m.resAmt;
+    h+='<div class="r"><span>Dólares disponibles en PPI</span><b>'+usd(have)+'</b></div>';
+    h+=extra>=0?'<p class="info">Tu reserva está cubierta. Después de apartarla te sobran <b>'+usd(extra)+'</b>.</p>':'<p class="note">Todavía te faltan <b>'+usd(-extra)+'</b> en dólares para cubrirla.</p>'}
+  h+='<p class="m">Mientras falten pocas semanas, lo más prudente es dejarla quieta en dólares, sin invertir.</p></div>';
+  $('v-metas').innerHTML=h;
+  function num(id){return parse($(id).value)}
+  $('mDebt').onchange=function(){var v=num('mDebt');if(v>=0){m.debt=v;save()}renderMetas()};
+  $('mMonthly').onchange=function(){var v=num('mMonthly');if(v>=0){m.monthly=v;save()}renderMetas()};
+  $('rAmt').onchange=function(){var v=num('rAmt');if(v>=0){m.resAmt=v;save()}renderMetas()};
+  $('rDate').onchange=function(){if(this.value){m.resDate=this.value;save()}renderMetas()};
+  $('mAdd').onclick=function(){var v=num('mPay');if(v>0){m.pays.push({d:todayStr(),u:v});save()}renderMetas()};
+  document.querySelectorAll('[data-del]').forEach(function(b){b.onclick=function(){m.pays.splice(Number(this.dataset.del),1);save();renderMetas()}});
+}
+function renderAll(){renderResumen();renderPos();renderVender();renderReparto();renderMetas();renderConsejos()}
 function route(){
-  var h=location.hash.slice(1);if(['resumen','posiciones','vender','reparto','consejos'].indexOf(h)<0)h='resumen';
+  var h=location.hash.slice(1);if(['resumen','posiciones','vender','reparto','metas','consejos'].indexOf(h)<0)h='resumen';
   document.querySelectorAll('[data-v]').forEach(function(s){s.hidden=s.dataset.v!==h});
   document.querySelectorAll('[data-t]').forEach(function(a){a.className=a.dataset.t===h?'on':''});
   window.scrollTo(0,0);
