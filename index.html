@@ -68,10 +68,10 @@ function parse(s){if(s==null)return NaN;var t=String(s).trim().replace(/\s|\$/g,
   else if(/^[1-9]\d{0,2}(\.\d{3})+$/.test(t))t=t.replace(/\./g,'');var n=Number(t);return isFinite(n)?n:NaN}
 
 /* ---- estado guardado en este celular ---- */
-function defState(){return {budget:4000000,comPct:0.726,usd:null,obj:{SPY:50,MSFT:10,GOOGL:10,V:10,JNJ:10,KO:10},prices:{}}}
+function defState(){return {budget:4000000,comPct:0.7865,usd:null,obj:{SPY:50,MSFT:10,GOOGL:10,V:10,JNJ:10,KO:10},prices:{}}}
 var S=defState();
 try{var raw=localStorage.getItem(KEY);if(raw){var o=JSON.parse(raw);S=Object.assign(defState(),o)}}catch(e){}
-if(S.comV!==2){S.comV=2;S.comPct=0.726}
+if(S.comV!==3){S.comV=3;S.comPct=0.7865}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 
 /* ---- datos de PPI ---- */
@@ -108,6 +108,7 @@ function process(){
 }
 function rate(){return S.usd||rateImplied}
 function cashArs(){var r=rate(),t=0;cash.forEach(function(c){t+=c.cur==='ARS'?c.amount:(r?c.amount*r:0)});return t}
+function feeFor(i){return (isCedear(i)||/acci/i.test(i.group))?S.comPct:0.61}
 function isCedear(i){return /cedear/i.test(i.group)}
 function totals(){
   var r=rate(),res=0,cost=0,val=0;
@@ -128,7 +129,7 @@ function renderResumen(){
   h+='<div class="c"><p class="m">Hoy, con lo que compraste y todavía tenés</p><p class="verdict '+cls(T.res)+'">'+v+'</p><p class="big '+cls(T.res)+'">'+sg(T.res)+'</p><p class="m">Es la suma de la ganancia o pérdida de cada inversión, comparando el precio de hoy con lo que pagaste. Todavía no vendiste, así que es una ganancia “en papel”.</p></div>';
   h+='<div class="c"><div class="r"><span>Tu plata total en PPI</span><b>'+ars(T.patr)+'</b></div><div class="r"><span>Invertida</span><b>'+ars(T.val)+'</b></div><div class="r"><span>Quieta (efectivo)</span><b>'+ars(T.cash)+'</b></div>'
    +(T.rate?'<div class="r"><span class="m">Dólar usado para convertir</span><b>'+ars(T.rate)+'</b></div>':'<p class="note">No pude calcular el dólar. Cargalo en la pestaña Reparto para ver todo en pesos.</p>')+'</div>';
-  h+='<p class="m">Comisión de PPI que uso en los cálculos: <b>'+f2(S.comPct)+'%</b> por operación. Se cambia en la pestaña Vender.</p>';
+  h+='<p class="m">Costo por operación que uso en los cálculos: <b>'+f2(S.comPct)+'%</b> en CEDEARs (comisión de PPI más derechos de mercado, con IVA) y 0,61% en obligaciones negociables. Se cambia en la pestaña Vender.</p>';
   h+=explain('¿Cómo se calcula?','La ganancia sale de comparar el precio de hoy con el precio promedio al que compraste (esos datos los da PPI). Lo que está en dólares se pasa a pesos con el dólar de arriba, que se deduce de tus propias posiciones. No incluye impuestos.');
   h+='<button class="btn p" id="copyBtn">Copiar resumen para consultar con Claude</button><p id="copyMsg" class="m" hidden></p><textarea id="copyBox" readonly hidden></textarea>';
   h+='<button class="btn" id="reload">Actualizar datos</button>';
@@ -159,20 +160,20 @@ function renderVender(){
   if(!held.length){$('v-vender').innerHTML=h+'<p class="info">No tenés nada para simular.</p>';return}
   h+='<div class="c"><label>Qué vendés<select id="sT">'+held.map(function(i,k){return '<option value="'+k+'">'+esc(i.ticker)+'</option>'}).join('')+'</select></label>'
    +'<div class="two"><label>Cantidad<input id="sQ" inputmode="decimal"></label><label>Precio de venta<input id="sP" inputmode="decimal"></label></div>'
-   +'<label>Comisión de PPI (%)<input id="sC" inputmode="decimal" value="'+fi(S.comPct)+'" placeholder="0"></label><div id="sOut" class="w" style="gap:8px"></div></div>';
+   +'<label>Comisión total (%) <span class="m">PPI + derechos de mercado, con IVA donde corresponde</span><input id="sC" inputmode="decimal" value="'+fi(feeFor(held[0]))+'" placeholder="0"></label><div id="sOut" class="w" style="gap:8px"></div></div>';
   h+=explain('¿Qué es el precio de equilibrio?','Es el precio mínimo al que tenés que vender para no perder plata una vez descontadas las comisiones de compra y de venta.');
   $('v-vender').innerHTML=h;
   function cur(){return held[Number($('sT').value)]}
-  function def(){var i=cur();$('sQ').value=fi(i.qty);$('sP').value=fi(i.price)}
+  function def(){var i=cur();$('sQ').value=fi(i.qty);$('sP').value=fi(i.price);$('sC').value=fi(feeFor(i))}
   function calc(){
     var i=cur(),q=Math.min(parse($('sQ').value),i.qty),ps=String($('sP').value).trim(),p=(i.price<100&&/^\d+\.\d+$/.test(ps))?Number(ps):parse(ps),c=parse($('sC').value);if(!(c>=0))c=0;
-    S.comPct=c;save();
+    if(isCedear(i)||/acci/i.test(i.group)){S.comPct=c;save()}
     if(!(q>0)||!(p>0)){$('sOut').innerHTML='<p class="m">Escribí cantidad y precio.</p>';return}
     var gross=q*p,com=gross*c/100,net=gross-com,cost=(i.ppc||0)*q,pl=net-cost,eq=(i.ppc||0)/(1-c/100);
     var u=i.cur==='USD'?usd:ars,sgu=i.cur==='USD'?'usd':'';
     $('sOut').innerHTML='<p class="m">Si vendés '+f0(q)+' de '+esc(i.ticker)+' a '+f2(p)+', ganás o perdés</p><p class="big '+cls(pl)+'">'+sg(pl,sgu)+'</p>'
      +'<div class="r"><span>Cobrás</span><b>'+u(net)+'</b></div><div class="r"><span>Comisión</span><b>'+u(com)+'</b></div><div class="r"><span>Te costó</span><b>'+u(cost)+'</b></div><div class="r"><span>Precio de equilibrio</span><b>'+f2(eq)+'</b></div>'
-     +(c===0?'<p class="note">Cargá la comisión de PPI para que el cálculo sea exacto.</p>':'<p class="m">Según PPI (vigente desde el 1/7/2026), comprar o vender CEDEARs por internet cuesta 0,6% más IVA, o sea 0,726%. Se suman los derechos de mercado, que no están incluidos acá, así que el resultado real puede ser apenas peor.</p>')+'<p class="m">No incluye impuestos.</p>';
+     +(c===0?'<p class="note">Cargá la comisión de PPI para que el cálculo sea exacto.</p>':'<p class="m">'+(isCedear(i)||/acci/i.test(i.group)?'CEDEARs y acciones por internet: comisión de PPI 0,6% + IVA (0,726%) más derechos de mercado de BYMA 0,05% + IVA (0,0605%) = 0,7865% por operación.':'Obligaciones negociables y bonos por internet: comisión de PPI 0,6% más derechos de mercado 0,01%, sin IVA = 0,61% por operación.')+' Fuentes: tabla de PPI vigente desde el 1/7/2026 y tabla de BYMA de junio de 2026.</p>')+'<p class="m">No incluye impuestos.</p>';
   }
   $('sT').onchange=function(){def();calc()};$('sQ').oninput=calc;$('sP').oninput=calc;$('sC').oninput=calc;def();calc();
 }
@@ -233,7 +234,7 @@ function advice(){
       if(Math.abs(d)>=5)out.push(['info',esc(t)+' se corrió de tu objetivo','Hoy es el '+f0(sh)+'% de tus CEDEARs y querías '+f0(S.obj[t])+'%. Podés comprar de los que quedaron cortos para acomodar, sin necesidad de vender.'])});
   }
   if(!(S.comPct>0))out.push(['warn','Falta cargar la comisión de PPI','Sin ese dato, el simulador de venta no puede decirte si ganás o perdés después de comisiones. Cargala en la pestaña Vender.']);
-  out.push(['info','Cuánto cobra PPI por operar','Por internet: 0,6% + IVA (0,726%) en cada compra y en cada venta de CEDEARs, más derechos de mercado. Comprar y vender cuesta entonces cerca del 1,5% en total, por eso conviene no operar de más. Cobrar un dividendo cuesta 1% + IVA. Guardar tus títulos no tiene costo.']);
+  out.push(['info','Cuánto cobra PPI por operar','Por internet, cada compra y cada venta de CEDEARs cuesta unos 0,79%: 0,6% + IVA de comisión de PPI y 0,05% + IVA de derechos de mercado de BYMA. Comprar y vender suma entonces cerca del 1,6%, por eso conviene no operar de más. En obligaciones negociables es 0,61% por operación. Cobrar un dividendo cuesta 1% + IVA. Guardar tus títulos no tiene costo.']);
   if(ced.length)out.push(['info','Sobre los dividendos de los CEDEARs','Para cobrar un dividendo tenés que tener el CEDEAR antes de la fecha de corte (al menos 48 horas antes). En acciones de Estados Unidos se retiene el 30%, y después tributa en Ganancias según tu situación.']);
   return out;
 }
