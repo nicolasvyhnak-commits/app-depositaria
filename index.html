@@ -73,14 +73,15 @@ try{var raw=localStorage.getItem(KEY);if(raw){var o=JSON.parse(raw);S=Object.ass
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 
 /* ---- datos de PPI ---- */
-var D=null, items=[], cash=[], rateImplied=null, totalInst=0;
+var M=null, D=null, items=[], cash=[], rateImplied=null, totalInst=0;
 function load(){
   fetch('/api/posiciones').then(function(r){if(r.status===401){location.reload();throw new Error('sesión')}return r.json()}).then(function(d){
     if(d.detail){$('st').textContent='Error: '+d.detail;return}
-    D=d;process();$('st').textContent='Datos reales de tu cuenta en PPI · '+new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+    D=d;process();loadMov();$('st').textContent='Datos reales de tu cuenta en PPI · '+new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
     renderAll();
   }).catch(function(e){$('st').textContent='No pude cargar los datos: '+e});
 }
+function loadMov(){fetch('/api/movimientos').then(function(r){return r.json()}).then(function(d){M=d&&!d.detail?d:null;renderConsejos()}).catch(function(){})}
 function curOf(c){c=String(c||'').toLowerCase();return c.indexOf('dolar')>=0||c.indexOf('usd')>=0?'USD':'ARS'}
 function process(){
   items=[];cash=[];rateImplied=null;totalInst=0;
@@ -237,6 +238,7 @@ function renderConsejos(){
   if(!a.length)h+='<p class="info">Por ahora no hay nada para marcar.</p>';
   a.forEach(function(x){h+='<div class="'+(x[0]==='warn'?'note':'info')+'"><b>'+x[1]+'</b><br>'+x[2]+'</div>'});
   h+='<div class="c"><h3>Noticias y riesgos</h3><p class="m">Esta app no lee noticias. Copiá el resumen y pegalo en un chat con Claude para que busque novedades de cada inversión.</p><button class="btn p" id="copyBtn2">Copiar resumen para Claude</button><p id="copyMsg2" class="m" hidden></p><textarea id="copyBox2" readonly hidden></textarea></div>';
+  if(M){var js=JSON.stringify(M,null,1);h+='<details><summary>Movimientos de PPI (último año)</summary><p>'+(Array.isArray(M)?M.length+' movimientos.':'')+' Estoy revisando este formato para calcular tus comisiones reales.</p><pre style="white-space:pre-wrap;font-size:11px">'+esc(js.slice(0,6000))+'</pre></details>'}
   $('v-consejos').innerHTML=h;$('copyBtn2').onclick=function(){copySummary(2)};
 }
 function summary(){

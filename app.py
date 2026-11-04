@@ -35,7 +35,7 @@ def token():
 
 def is_authed(request: Request, cred=None):
     c = request.cookies.get(COOKIE)
-    if c and hmac.compare_digest(c, token()):
+    if c and hmac.compare_digest(c.encode("utf-8", "ignore"), token().encode()):
         return True
     if cred is not None:
         return secrets.compare_digest(cred.password.encode(), need("APP_PASSWORD").encode())
@@ -112,6 +112,21 @@ def saldos():
         raise HTTPException(502, "PPI respondió con error: " + safe(e))
 
 import re
+from datetime import datetime, timedelta
+
+@app.get("/api/movimientos", dependencies=[Depends(auth)])
+def movimientos():
+    try:
+        from ppi_client.models.account_movements import AccountMovements
+        hoy = datetime.now()
+        res = jsonable(client().account.get_movements(AccountMovements(need("PPI_ACCOUNT"), hoy - timedelta(days=365), hoy, None)))
+        first = res[0] if isinstance(res, list) and res else (res if isinstance(res, dict) else None)
+        log.info("movimientos: tipo=%s n=%s claves=%s", type(res).__name__, len(res) if hasattr(res, "__len__") else "?", sorted(first.keys()) if isinstance(first, dict) else None)
+        return res
+    except HTTPException: raise
+    except Exception as e:
+        log.error("PPI movimientos error: %s", safe(e))
+        raise HTTPException(502, "PPI respondió con error: " + safe(e))
 
 @app.get("/api/precio/{ticker}", dependencies=[Depends(auth)])
 def precio(ticker: str):
