@@ -150,6 +150,35 @@ function renderResumen(){
   $('v-resumen').innerHTML=h;
   $('copyBtn').onclick=copySummary;$('reload').onclick=function(){$('st').textContent='Actualizando…';load()};
 }
+function sold(){
+  if(!Array.isArray(M))return null;
+  var held={};items.forEach(function(i){if(i.qty>0)held[String(i.ticker).toUpperCase()]=1});
+  var cur={};M.forEach(function(m){if(/^(COMPRA|VENTA)/i.test(m.description||'')){var t=String(m.ticker).toUpperCase();(cur[t]=cur[t]||{})[/dolar/i.test(m.currency||'')?'usd':'ars']=1}});
+  var by={},vol=0;
+  M.forEach(function(m){var d=String(m.description||''),t=String(m.ticker).toUpperCase();
+    if(!/^(COMPRA|VENTA)/i.test(d)||held[t]||/dolar/i.test(m.currency||'')||(cur[t]&&cur[t].usd))return;
+    var o=by[t]||(by[t]={t:t,net:0,buy:0,first:'9999',last:''});var a=Number(m.amount)||0;o.net+=a;if(a<0)o.buy+=-a;vol+=Math.abs(a);
+    var dt=String(m.agreementDate).slice(0,10);if(dt<o.first)o.first=dt;if(dt>o.last)o.last=dt});
+  var list=Object.keys(by).map(function(k){return by[k]}).sort(function(a,b){return b.net-a.net});
+  var cau=0,fondo=0;
+  M.forEach(function(m){var d=String(m.description||''),a=Number(m.amount)||0;
+    if(/cauci[oó]n colocadora/i.test(d))cau+=a;
+    if(/Liquidaci[oó]n de (Suscripci[oó]n|Rescate)/i.test(d))fondo+=a});
+  var tot=0;list.forEach(function(o){tot+=o.net});
+  return {list:list,tot:tot,cau:cau,fondo:fondo,fees:vol*0.007865};
+}
+function renderSold(){
+  var s=sold();if(!s||!s.list.length)return '';
+  var h='<h2>Lo que ya vendiste</h2><p class="m">Resultado en pesos de las inversiones que cerraste, ya con comisiones. No incluye el AL30, que usaste para cambiar de moneda.</p>';
+  s.list.forEach(function(o){var pc=o.buy>0?o.net/o.buy*100:null;
+    h+='<div class="c"><div class="r"><span class="t">'+esc(o.t)+'</span><b class="'+cls(o.net)+'">'+sg(o.net)+(pc!=null?' ('+sg(pc,'%')+')':'')+'</b></div><p class="m">Del '+esc(o.first.split('-').reverse().join('/'))+' al '+esc(o.last.split('-').reverse().join('/'))+'</p></div>'});
+  h+='<div class="c"><div class="r"><span class="t">Total vendido</span><b class="'+cls(s.tot)+'">'+sg(s.tot)+'</b></div>'
+   +(Math.abs(s.cau)>0.5?'<div class="r"><span>Intereses de cauciones</span><b class="'+cls(s.cau)+'">'+sg(s.cau)+'</b></div>':'')
+   +(Math.abs(s.fondo)>0.5?'<div class="r"><span>Fondo común de inversión</span><b class="'+cls(s.fondo)+'">'+sg(s.fondo)+'</b></div>':'')
+   +'<div class="r"><span class="m">Comisiones pagadas (estimadas)</span><b>'+ars(s.fees)+'</b></div>'
+   +'<p class="m">Las comisiones ya están descontadas en cada resultado. Las estimo aplicando 0,79% a todo lo que compraste y vendiste.</p></div>';
+  return h;
+}
 function renderPos(){
   if(!D)return;var h='<h2>Lo que tenés</h2>';
   if(!items.length)h+='<p class="info">Todavía no tenés inversiones en la cuenta.</p>';
@@ -169,6 +198,7 @@ function renderPos(){
   if(!cash.length)h+='<p class="m">No tenés efectivo disponible.</p>';
   cash.forEach(function(c){h+='<div class="r"><span>'+esc(c.name)+'</span><b>'+(c.cur==='USD'?usd(c.amount):ars(c.amount))+'</b></div>'});
   h+='</div>'+explain('¿Por qué hay dos dólares?','MEP y CCL son dos formas legales de tener dólares a través de la bolsa. Para vos son parecidos: el MEP es dólar billete y el CCL es dólar divisa. Con ambos podés comprar CEDEARs si el instrumento lo permite.');
+  h+=renderSold();
   $('v-posiciones').innerHTML=h;
 }
 function renderVender(){
