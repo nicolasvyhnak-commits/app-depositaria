@@ -1,5 +1,5 @@
 """Cartera PPI: servicio de SOLO LECTURA. Las credenciales vienen de variables de entorno."""
-import os, secrets, time, threading
+import os, secrets, time, threading, traceback, logging
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -9,6 +9,15 @@ app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 basic = HTTPBasic()
 lock = threading.Lock()
 _ppi = {"c": None, "t": 0}
+
+log = logging.getLogger("uvicorn.error")
+
+def safe(e):
+    t = f"{type(e).__name__}: {e}"
+    for k in ("PPI_PUBLIC_KEY", "PPI_PRIVATE_KEY", "APP_PASSWORD"):
+        v = os.environ.get(k)
+        if v: t = t.replace(v, "***")
+    return t[:300]
 
 def need(name):
     v = os.environ.get(name)
@@ -44,7 +53,9 @@ def posiciones():
         return jsonable(client().account.get_balance_and_positions(need("PPI_ACCOUNT")))
     except HTTPException: raise
     except Exception as e:
-        raise HTTPException(502, f"PPI respondió con error: {type(e).__name__}")
+        _ppi["c"] = None
+        log.error("PPI error: %s\n%s", safe(e), "".join(traceback.format_exc().splitlines(True)[-6:]))
+        raise HTTPException(502, "PPI respondió con error: " + safe(e))
 
 @app.get("/api/saldos", dependencies=[Depends(auth)])
 def saldos():
@@ -52,7 +63,9 @@ def saldos():
         return jsonable(client().account.get_available_balance(need("PPI_ACCOUNT")))
     except HTTPException: raise
     except Exception as e:
-        raise HTTPException(502, f"PPI respondió con error: {type(e).__name__}")
+        _ppi["c"] = None
+        log.error("PPI error: %s\n%s", safe(e), "".join(traceback.format_exc().splitlines(True)[-6:]))
+        raise HTTPException(502, "PPI respondió con error: " + safe(e))
 
 PAGE = """<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>Cartera PPI</title><body style="font-family:system-ui;margin:16px;max-width:560px">
