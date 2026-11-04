@@ -2,6 +2,7 @@
 <html lang="es">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Mi Cartera"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/icon.png"><meta name="theme-color" content="#1B4FD6">
 <title>Mi Cartera PPI</title>
 <style>
 :root{--bg:#F2F4F7;--s:#fff;--ink:#101A24;--mut:#586574;--line:#D7DDE5;--acc:#1B4FD6;--accI:#fff;--g:#0E7A55;--l:#BF3126;--wb:#FFF1CF;--wi:#654500;--ib:#E3EBFB}
@@ -74,7 +75,7 @@ function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 /* ---- datos de PPI ---- */
 var D=null, items=[], cash=[], rateImplied=null, totalInst=0;
 function load(){
-  fetch('/api/posiciones').then(function(r){return r.json()}).then(function(d){
+  fetch('/api/posiciones').then(function(r){if(r.status===401){location.reload();throw new Error('sesión')}return r.json()}).then(function(d){
     if(d.detail){$('st').textContent='Error: '+d.detail;return}
     D=d;process();$('st').textContent='Datos reales de tu cuenta en PPI · '+new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
     renderAll();
