@@ -67,7 +67,7 @@ function parse(s){if(s==null)return NaN;var t=String(s).trim().replace(/\s|\$/g,
   else if(/^\d{1,3}(\.\d{3})+$/.test(t))t=t.replace(/\./g,'');var n=Number(t);return isFinite(n)?n:NaN}
 
 /* ---- estado guardado en este celular ---- */
-function defState(){return {budget:4000000,comPct:0,usd:null,obj:{SPY:50,MSFT:10,GOOGL:10,V:10,JNJ:10,KO:10},prices:{}}}
+function defState(){return {budget:4000000,comPct:0.726,usd:null,obj:{SPY:50,MSFT:10,GOOGL:10,V:10,JNJ:10,KO:10},prices:{}}}
 var S=defState();
 try{var raw=localStorage.getItem(KEY);if(raw){var o=JSON.parse(raw);S=Object.assign(defState(),o)}}catch(e){}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
@@ -169,7 +169,7 @@ function renderVender(){
     var u=i.cur==='USD'?usd:ars,sgu=i.cur==='USD'?'usd':'';
     $('sOut').innerHTML='<p class="m">Si vendés '+f0(q)+' de '+esc(i.ticker)+' a '+f2(p)+', ganás o perdés</p><p class="big '+cls(pl)+'">'+sg(pl,sgu)+'</p>'
      +'<div class="r"><span>Cobrás</span><b>'+u(net)+'</b></div><div class="r"><span>Comisión</span><b>'+u(com)+'</b></div><div class="r"><span>Te costó</span><b>'+u(cost)+'</b></div><div class="r"><span>Precio de equilibrio</span><b>'+f2(eq)+'</b></div>'
-     +(c===0?'<p class="note">Cargá la comisión de PPI para que el cálculo sea exacto.</p>':'')+'<p class="m">No incluye impuestos.</p>';
+     +(c===0?'<p class="note">Cargá la comisión de PPI para que el cálculo sea exacto.</p>':'<p class="m">Según PPI (vigente desde el 1/7/2026), comprar o vender CEDEARs por internet cuesta 0,6% más IVA, o sea 0,726%. Se suman los derechos de mercado, que no están incluidos acá, así que el resultado real puede ser apenas peor.</p>')+'<p class="m">No incluye impuestos.</p>';
   }
   $('sT').onchange=function(){def();calc()};$('sQ').oninput=calc;$('sP').oninput=calc;$('sC').oninput=calc;def();calc();
 }
@@ -230,6 +230,7 @@ function advice(){
       if(Math.abs(d)>=5)out.push(['info',esc(t)+' se corrió de tu objetivo','Hoy es el '+f0(sh)+'% de tus CEDEARs y querías '+f0(S.obj[t])+'%. Podés comprar de los que quedaron cortos para acomodar, sin necesidad de vender.'])});
   }
   if(!(S.comPct>0))out.push(['warn','Falta cargar la comisión de PPI','Sin ese dato, el simulador de venta no puede decirte si ganás o perdés después de comisiones. Cargala en la pestaña Vender.']);
+  out.push(['info','Cuánto cobra PPI por operar','Por internet: 0,6% + IVA (0,726%) en cada compra y en cada venta de CEDEARs, más derechos de mercado. Comprar y vender cuesta entonces cerca del 1,5% en total, por eso conviene no operar de más. Cobrar un dividendo cuesta 1% + IVA. Guardar tus títulos no tiene costo.']);
   if(ced.length)out.push(['info','Sobre los dividendos de los CEDEARs','Para cobrar un dividendo tenés que tener el CEDEAR antes de la fecha de corte (al menos 48 horas antes). En acciones de Estados Unidos se retiene el 30%, y después tributa en Ganancias según tu situación.']);
   return out;
 }
