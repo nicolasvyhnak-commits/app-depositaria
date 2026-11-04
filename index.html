@@ -70,6 +70,7 @@ function parse(s){if(s==null)return NaN;var t=String(s).trim().replace(/\s|\$/g,
 function defState(){return {budget:4000000,comPct:0.726,usd:null,obj:{SPY:50,MSFT:10,GOOGL:10,V:10,JNJ:10,KO:10},prices:{}}}
 var S=defState();
 try{var raw=localStorage.getItem(KEY);if(raw){var o=JSON.parse(raw);S=Object.assign(defState(),o)}}catch(e){}
+if(S.comV!==2){S.comV=2;S.comPct=0.726}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 
 /* ---- datos de PPI ---- */
@@ -126,6 +127,7 @@ function renderResumen(){
   h+='<div class="c"><p class="m">Hoy, con lo que compraste y todavía tenés</p><p class="verdict '+cls(T.res)+'">'+v+'</p><p class="big '+cls(T.res)+'">'+sg(T.res)+'</p><p class="m">Es la suma de la ganancia o pérdida de cada inversión, comparando el precio de hoy con lo que pagaste. Todavía no vendiste, así que es una ganancia “en papel”.</p></div>';
   h+='<div class="c"><div class="r"><span>Tu plata total en PPI</span><b>'+ars(T.patr)+'</b></div><div class="r"><span>Invertida</span><b>'+ars(T.val)+'</b></div><div class="r"><span>Quieta (efectivo)</span><b>'+ars(T.cash)+'</b></div>'
    +(T.rate?'<div class="r"><span class="m">Dólar usado para convertir</span><b>'+ars(T.rate)+'</b></div>':'<p class="note">No pude calcular el dólar. Cargalo en la pestaña Reparto para ver todo en pesos.</p>')+'</div>';
+  h+='<p class="m">Comisión de PPI que uso en los cálculos: <b>'+f2(S.comPct)+'%</b> por operación. Se cambia en la pestaña Vender.</p>';
   h+=explain('¿Cómo se calcula?','La ganancia sale de comparar el precio de hoy con el precio promedio al que compraste (esos datos los da PPI). Lo que está en dólares se pasa a pesos con el dólar de arriba, que se deduce de tus propias posiciones. No incluye impuestos.');
   h+='<button class="btn p" id="copyBtn">Copiar resumen para consultar con Claude</button><p id="copyMsg" class="m" hidden></p><textarea id="copyBox" readonly hidden></textarea>';
   h+='<button class="btn" id="reload">Actualizar datos</button>';
