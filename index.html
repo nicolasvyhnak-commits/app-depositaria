@@ -244,7 +244,14 @@ function renderConsejos(){
   if(!a.length)h+='<p class="info">Por ahora no hay nada para marcar.</p>';
   a.forEach(function(x){h+='<div class="'+(x[0]==='warn'?'note':'info')+'"><b>'+x[1]+'</b><br>'+x[2]+'</div>'});
   h+='<div class="c"><h3>Noticias y riesgos</h3><p class="m">Esta app no lee noticias. Copiá el resumen y pegalo en un chat con Claude para que busque novedades de cada inversión.</p><button class="btn p" id="copyBtn2">Copiar resumen para Claude</button><p id="copyMsg2" class="m" hidden></p><textarea id="copyBox2" readonly hidden></textarea></div>';
-  if(M){var js=JSON.stringify(M,null,1);h+='<details><summary>Movimientos de PPI (último año)</summary><p>'+(Array.isArray(M)?M.length+' movimientos.':'')+' Estoy revisando este formato para calcular tus comisiones reales.</p><pre style="white-space:pre-wrap;font-size:11px">'+esc(js.slice(0,6000))+'</pre></details>'}
+  if(M&&Array.isArray(M)){
+    var by={};M.forEach(function(m){var k=(m.description||'(sin descripción)')+'|'+(m.currency||'');var o=by[k]||(by[k]={d:m.description||'(sin descripción)',c:m.currency||'',n:0,s:0});o.n++;o.s+=Number(m.amount)||0});
+    h+='<h2>Movimientos del último año</h2><p class="m">Son los movimientos que informa PPI ('+M.length+'). Agrupados por tipo:</p><div class="c">';
+    Object.keys(by).sort().forEach(function(k){var o=by[k];h+='<div class="r"><span>'+esc(o.d)+' <span class="m">('+o.n+')</span></span><b>'+f2(o.s)+'</b></div>'});
+    h+='</div><details><summary>Ver todos, del más nuevo al más viejo</summary>';
+    M.slice().sort(function(x,y){return String(y.agreementDate).localeCompare(String(x.agreementDate))}).forEach(function(m){
+      h+='<div class="c" style="margin-top:8px"><div class="r"><span class="t">'+esc(m.ticker||'')+'</span><b>'+f2(m.amount)+' '+esc(m.currency||'')+'</b></div><p class="m">'+esc(m.description||'')+'</p><p class="m">'+esc(String(m.agreementDate||'').slice(0,10))+(m.quantity?' · cantidad '+f2(m.quantity):'')+(m.price?' · precio '+f2(m.price):'')+'</p></div>'});
+    h+='</details>'}
   $('v-consejos').innerHTML=h;$('copyBtn2').onclick=function(){copySummary(2)};
 }
 function summary(){
