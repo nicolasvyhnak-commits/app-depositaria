@@ -83,7 +83,7 @@ function load(){
     renderAll();
   }).catch(function(e){$('st').textContent='No pude cargar los datos: '+e});
 }
-function loadMov(){fetch('/api/movimientos').then(function(r){return r.json()}).then(function(d){M=d&&!d.detail?d:null;renderConsejos()}).catch(function(){})}
+function loadMov(){fetch('/api/movimientos').then(function(r){return r.json()}).then(function(d){M=d&&!d.detail?d:null;renderAll()}).catch(function(){})}
 function curOf(c){c=String(c||'').toLowerCase();return c.indexOf('dolar')>=0||c.indexOf('usd')>=0?'USD':'ARS'}
 function process(){
   items=[];cash=[];rateImplied=null;totalInst=0;
@@ -108,12 +108,26 @@ function process(){
 }
 function rate(){return S.usd||rateImplied}
 function cashArs(){var r=rate(),t=0;cash.forEach(function(c){t+=c.cur==='ARS'?c.amount:(r?c.amount*r:0)});return t}
+function realFor(i){
+  if(!Array.isArray(M)||!(i.qty>0))return null;
+  var cur=i.cur==='USD'?/dolar/i:/pesos/i,tk=String(i.ticker).toUpperCase();
+  var rows=M.filter(function(m){return String(m.ticker).toUpperCase()===tk&&cur.test(m.currency||'')}).sort(function(a,b){return String(a.agreementDate).localeCompare(String(b.agreementDate))});
+  var q=0,c=0;
+  rows.forEach(function(m){var d=String(m.description||'');
+    if(/^COMPRA/i.test(d)){q+=Number(m.quantity)||0;c+=-(Number(m.amount)||0)}
+    else if(/^VENTA/i.test(d)&&q>0){var avg=c/q,x=Math.min(-(Number(m.quantity)||0),q);c-=avg*x;q-=x}});
+  if(!(q>0)||Math.abs(q-i.qty)/i.qty>0.005)return null;
+  var inc=0,re=new RegExp(tk.replace(/[^A-Z0-9]/g,''),'i');
+  M.forEach(function(m){var d=String(m.description||'');
+    if(Number(m.amount)>0&&re.test(d)&&/interest|renta|cup[oó]n|dividend|amortiz/i.test(d)&&cur.test(m.currency||''))inc+=Number(m.amount)});
+  return {cost:c,income:inc};
+}
 function feeFor(i){return (isCedear(i)||/acci/i.test(i.group))?S.comPct:0.61}
 function isCedear(i){return /cedear/i.test(i.group)}
 function totals(){
   var r=rate(),res=0,cost=0,val=0;
   items.forEach(function(i){
-    if(i.ret!=null){var v=i.cur==='USD'?(r?i.ret*r:0):i.ret;res+=v}
+    var rl=realFor(i),rv=rl?(i.amount+rl.income-rl.cost):i.ret;if(rv!=null){var v=i.cur==='USD'?(r?rv*r:0):rv;res+=v}
     if(i.ars!=null){val+=i.ars}
   });
   var ca=cashArs();
@@ -126,7 +140,7 @@ function renderResumen(){
   if(!D){return}
   var T=totals(),h='';
   var v=Math.abs(T.res)<1?'Sin variación':(T.res>0?'Ganando':'Perdiendo');
-  h+='<div class="c"><p class="m">Hoy, con lo que compraste y todavía tenés</p><p class="verdict '+cls(T.res)+'">'+v+'</p><p class="big '+cls(T.res)+'">'+sg(T.res)+'</p><p class="m">Es el rendimiento acumulado que informa PPI para cada inversión. En una obligación negociable incluye los intereses que ya cobraste, no solo lo que cambió el precio. Por eso puede dar verde y, aun así, el simulador de Vender te muestre una pequeña pérdida por las comisiones: son dos cuentas distintas.</p></div>';
+  h+='<div class="c"><p class="m">Hoy, con lo que compraste y todavía tenés</p><p class="verdict '+cls(T.res)+'">'+v+'</p><p class="big '+cls(T.res)+'">'+sg(T.res)+'</p><p class="m">Se calcula con tus movimientos reales: lo que pagaste con comisiones, lo que vale hoy y los intereses o dividendos que ya cobraste. Todavía no descuenta la comisión de venta, porque no vendiste. El simulador de Vender sí la descuenta, y por eso puede mostrar menos.</p></div>';
   h+='<div class="c"><div class="r"><span>Tu plata total en PPI</span><b>'+ars(T.patr)+'</b></div><div class="r"><span>Invertida</span><b>'+ars(T.val)+'</b></div><div class="r"><span>Quieta (efectivo)</span><b>'+ars(T.cash)+'</b></div>'
    +(T.rate?'<div class="r"><span class="m">Dólar usado para convertir</span><b>'+ars(T.rate)+'</b></div>':'<p class="note">No pude calcular el dólar. Cargalo en la pestaña Reparto para ver todo en pesos.</p>')+'</div>';
   h+='<p class="m">Costo por operación que uso en los cálculos: <b>'+f2(S.comPct)+'%</b> en CEDEARs (comisión de PPI más derechos de mercado, con IVA) y 0,61% en obligaciones negociables. Se cambia en la pestaña Vender.</p>';
@@ -145,6 +159,8 @@ function renderPos(){
      +'<div class="r"><span>Cantidad</span><b>'+f0(i.qty)+'</b></div><div class="r"><span>Precio hoy</span><b>'+f2(i.price)+'</b></div>'
      +'<div class="r"><span>Precio promedio de compra</span><b>'+f2(i.ppc)+'</b></div>'
      +(i.ret!=null?'<div class="r"><span>Rendimiento acumulado (PPI)</span><b class="'+cls(i.ret)+'">'+sg(i.ret,i.cur==='USD'?'usd':'')+' ('+sg(i.retPct,'%')+')</b></div>':'')
+     +(function(){var rl=realFor(i);if(!rl)return '';var u2=i.cur==='USD'?usd:ars,sgk=i.cur==='USD'?'usd':'',res=i.amount+rl.income-rl.cost;
+       return '<div class="r"><span>Pagaste en total (con comisiones)</span><b>'+u2(rl.cost)+'</b></div><div class="r"><span>Intereses o dividendos cobrados</span><b>'+u2(rl.income)+'</b></div><div class="r"><span class="t">Resultado real hasta hoy</span><b class="'+cls(res)+'">'+sg(res,sgk)+'</b></div><p class="m">Calculado con tus movimientos: lo que pagaste con comisiones, lo que vale hoy y los cobros recibidos. Todavía no descuenta la comisión de venta.</p>'})()
      +(i.ppc>0&&i.qty>0?'<div class="r"><span>Solo por el precio, hoy</span><b class="'+cls(i.amount-i.ppc*i.qty)+'">'+sg(i.amount-i.ppc*i.qty,i.cur==='USD'?'usd':'')+'</b></div><p class="m">El rendimiento de PPI incluye lo que ya cobraste de intereses o dividendos. La línea de abajo es lo que variaría el precio desde que compraste, sin contar esos cobros. Es aproximada porque PPI redondea el precio.</p>':'')
      +(i.ars!=null&&i.cur==='USD'?'<div class="r"><span class="m">Equivale a</span><b>'+ars(i.ars)+'</b></div>':'')+'</div>';
     if(/^ON|obligac/i.test(i.group))h+=explain('¿Qué es una obligación negociable (ON)?','Es un préstamo que le hacés a una empresa. A cambio te paga intereses cada tanto y te devuelve el capital al vencimiento. Su precio sube y baja mientras tanto. Si la vendés antes de que venza, podés ganar o perder según el precio de ese día.');
@@ -170,10 +186,10 @@ function renderVender(){
     var i=cur(),q=Math.min(parse($('sQ').value),i.qty),ps=String($('sP').value).trim(),p=(i.price<100&&/^\d+\.\d+$/.test(ps))?Number(ps):parse(ps),c=parse($('sC').value);if(!(c>=0))c=0;
     if(isCedear(i)||/acci/i.test(i.group)){S.comPct=c;save()}
     if(!(q>0)||!(p>0)){$('sOut').innerHTML='<p class="m">Escribí cantidad y precio.</p>';return}
-    var gross=q*p,com=gross*c/100,net=gross-com,cost=(i.ppc||0)*q,pl=net-cost,eq=(i.ppc||0)/(1-c/100);
+    var rl=realFor(i),gross=q*p,com=gross*c/100,net=gross-com,cost=rl?rl.cost*q/i.qty:(i.ppc||0)*q,pl=net-cost,eq=(cost/q)/(1-c/100),inc=rl?rl.income*q/i.qty:0;
     var u=i.cur==='USD'?usd:ars,sgu=i.cur==='USD'?'usd':'';
     $('sOut').innerHTML='<p class="m">Si vendés '+f0(q)+' de '+esc(i.ticker)+' a '+f2(p)+', ganás o perdés</p><p class="big '+cls(pl)+'">'+sg(pl,sgu)+'</p>'
-     +'<div class="r"><span>Cobrás</span><b>'+u(net)+'</b></div><div class="r"><span>Comisión</span><b>'+u(com)+'</b></div><div class="r"><span>Te costó</span><b>'+u(cost)+'</b></div><div class="r"><span>Precio de equilibrio</span><b>'+f2(eq)+'</b></div>'
+     +'<div class="r"><span>Cobrás</span><b>'+u(net)+'</b></div><div class="r"><span>Comisión</span><b>'+u(com)+'</b></div><div class="r"><span>Te costó</span><b>'+u(cost)+'</b></div><div class="r"><span>Precio de equilibrio</span><b>'+f2(eq)+'</b></div>'+(inc>0?'<div class="r"><span>Con los intereses ya cobrados</span><b class="'+cls(pl+inc)+'">'+sg(pl+inc,sgu)+'</b></div>':'')
      +(c===0?'<p class="note">Cargá la comisión de PPI para que el cálculo sea exacto.</p>':'<p class="m">'+(isCedear(i)||/acci/i.test(i.group)?'CEDEARs y acciones por internet: comisión de PPI 0,6% + IVA (0,726%) más derechos de mercado de BYMA 0,05% + IVA (0,0605%) = 0,7865% por operación.':'Obligaciones negociables y bonos por internet: comisión de PPI 0,6% más derechos de mercado 0,01%, sin IVA = 0,61% por operación.')+' Fuentes: tabla de PPI vigente desde el 1/7/2026 y tabla de BYMA de junio de 2026.</p>')+'<p class="m">No incluye impuestos.</p>';
   }
   $('sT').onchange=function(){def();calc()};$('sQ').oninput=calc;$('sP').oninput=calc;$('sC').oninput=calc;def();calc();
