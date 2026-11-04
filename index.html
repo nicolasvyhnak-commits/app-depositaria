@@ -126,7 +126,7 @@ function renderResumen(){
   if(!D){return}
   var T=totals(),h='';
   var v=Math.abs(T.res)<1?'Sin variación':(T.res>0?'Ganando':'Perdiendo');
-  h+='<div class="c"><p class="m">Hoy, con lo que compraste y todavía tenés</p><p class="verdict '+cls(T.res)+'">'+v+'</p><p class="big '+cls(T.res)+'">'+sg(T.res)+'</p><p class="m">Es la suma de la ganancia o pérdida de cada inversión, comparando el precio de hoy con lo que pagaste. Todavía no vendiste, así que es una ganancia “en papel”.</p></div>';
+  h+='<div class="c"><p class="m">Hoy, con lo que compraste y todavía tenés</p><p class="verdict '+cls(T.res)+'">'+v+'</p><p class="big '+cls(T.res)+'">'+sg(T.res)+'</p><p class="m">Es el rendimiento acumulado que informa PPI para cada inversión. En una obligación negociable incluye los intereses que ya cobraste, no solo lo que cambió el precio. Por eso puede dar verde y, aun así, el simulador de Vender te muestre una pequeña pérdida por las comisiones: son dos cuentas distintas.</p></div>';
   h+='<div class="c"><div class="r"><span>Tu plata total en PPI</span><b>'+ars(T.patr)+'</b></div><div class="r"><span>Invertida</span><b>'+ars(T.val)+'</b></div><div class="r"><span>Quieta (efectivo)</span><b>'+ars(T.cash)+'</b></div>'
    +(T.rate?'<div class="r"><span class="m">Dólar usado para convertir</span><b>'+ars(T.rate)+'</b></div>':'<p class="note">No pude calcular el dólar. Cargalo en la pestaña Reparto para ver todo en pesos.</p>')+'</div>';
   h+='<p class="m">Costo por operación que uso en los cálculos: <b>'+f2(S.comPct)+'%</b> en CEDEARs (comisión de PPI más derechos de mercado, con IVA) y 0,61% en obligaciones negociables. Se cambia en la pestaña Vender.</p>';
@@ -144,7 +144,8 @@ function renderPos(){
     h+='<div class="c"><div class="r"><span class="t">'+esc(i.ticker)+' <span class="m">'+esc(i.group)+'</span></span><b>'+u(i.amount)+'</b></div><p class="m">'+esc(i.desc)+'</p>'
      +'<div class="r"><span>Cantidad</span><b>'+f0(i.qty)+'</b></div><div class="r"><span>Precio hoy</span><b>'+f2(i.price)+'</b></div>'
      +'<div class="r"><span>Precio promedio de compra</span><b>'+f2(i.ppc)+'</b></div>'
-     +(i.ret!=null?'<div class="r"><span>Ganás o perdés</span><b class="'+cls(i.ret)+'">'+sg(i.ret,i.cur==='USD'?'usd':'')+' ('+sg(i.retPct,'%')+')</b></div>':'')
+     +(i.ret!=null?'<div class="r"><span>Rendimiento acumulado (PPI)</span><b class="'+cls(i.ret)+'">'+sg(i.ret,i.cur==='USD'?'usd':'')+' ('+sg(i.retPct,'%')+')</b></div>':'')
+     +(i.ppc>0&&i.qty>0?'<div class="r"><span>Solo por el precio, hoy</span><b class="'+cls(i.amount-i.ppc*i.qty)+'">'+sg(i.amount-i.ppc*i.qty,i.cur==='USD'?'usd':'')+'</b></div><p class="m">El rendimiento de PPI incluye lo que ya cobraste de intereses o dividendos. La línea de abajo es lo que variaría el precio desde que compraste, sin contar esos cobros. Es aproximada porque PPI redondea el precio.</p>':'')
      +(i.ars!=null&&i.cur==='USD'?'<div class="r"><span class="m">Equivale a</span><b>'+ars(i.ars)+'</b></div>':'')+'</div>';
     if(/^ON|obligac/i.test(i.group))h+=explain('¿Qué es una obligación negociable (ON)?','Es un préstamo que le hacés a una empresa. A cambio te paga intereses cada tanto y te devuelve el capital al vencimiento. Su precio sube y baja mientras tanto. Si la vendés antes de que venza, podés ganar o perder según el precio de ese día.');
   });
@@ -164,7 +165,7 @@ function renderVender(){
   h+=explain('¿Qué es el precio de equilibrio?','Es el precio mínimo al que tenés que vender para no perder plata una vez descontadas las comisiones de compra y de venta.');
   $('v-vender').innerHTML=h;
   function cur(){return held[Number($('sT').value)]}
-  function def(){var i=cur();$('sQ').value=fi(i.qty);$('sP').value=fi(i.price);$('sC').value=fi(feeFor(i))}
+  function def(){var i=cur();$('sQ').value=fi(i.qty);$('sP').value=fi(i.qty>0&&i.amount>0?i.amount/i.qty:i.price);$('sC').value=fi(feeFor(i))}
   function calc(){
     var i=cur(),q=Math.min(parse($('sQ').value),i.qty),ps=String($('sP').value).trim(),p=(i.price<100&&/^\d+\.\d+$/.test(ps))?Number(ps):parse(ps),c=parse($('sC').value);if(!(c>=0))c=0;
     if(isCedear(i)||/acci/i.test(i.group)){S.comPct=c;save()}
