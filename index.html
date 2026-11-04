@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Mi Cartera PPI</title>
+<style>
+:root{--bg:#F2F4F7;--s:#fff;--ink:#101A24;--mut:#586574;--line:#D7DDE5;--acc:#1B4FD6;--accI:#fff;--g:#0E7A55;--l:#BF3126;--wb:#FFF1CF;--wi:#654500;--ib:#E3EBFB}
+@media(prefers-color-scheme:dark){:root{--bg:#0C1218;--s:#141C25;--ink:#E7EDF3;--mut:#93A1B1;--line:#25303C;--acc:#7AA2FF;--accI:#0C1218;--g:#3DD598;--l:#FF7A6E;--wb:#3A2E10;--wi:#F2D58A;--ib:#1B2A47}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;padding:14px max(16px,env(safe-area-inset-right)) 100px max(16px,env(safe-area-inset-left))}
+.w{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1,h2,h3,p,ul{margin:0}ul{padding:0;list-style:none}h1{font-size:22px}h2{font-size:19px}h3{font-size:15px}
+.c{background:var(--s);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.big{font:600 30px ui-monospace,Menlo,monospace;overflow-wrap:anywhere}
+.verdict{font-size:34px;font-weight:700;line-height:1.1}
+.m{color:var(--mut);font-size:13px}.t{font-weight:600}
+.r{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+.r b{font:600 14px ui-monospace,Menlo,monospace;text-align:right;overflow-wrap:anywhere}
+.g{color:var(--g)}.l{color:var(--l)}
+.note{background:var(--wb);color:var(--wi);padding:10px 12px;border-radius:8px;font-size:14px}
+.info{background:var(--ib);padding:10px 12px;border-radius:8px;font-size:14px}
+label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:500;min-width:0}
+input,select,textarea{font:inherit;font-size:16px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-height:44px;width:100%;min-width:0}
+textarea{font-size:13px;min-height:140px}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+.btn{font:inherit;font-weight:600;min-height:44px;padding:10px 16px;border-radius:8px;border:1px solid var(--line);background:var(--s);color:var(--ink);cursor:pointer}
+.btn.p{background:var(--acc);border-color:var(--acc);color:var(--accI)}
+details{font-size:14px;color:var(--mut)}summary{cursor:pointer;color:var(--acc);font-weight:500;min-height:32px;display:flex;align-items:center}
+details p{margin-top:6px}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden}.bar i{display:block;height:100%;background:var(--acc)}
+.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--s);border-top:1px solid var(--line);padding:0 max(8px,env(safe-area-inset-right)) env(safe-area-inset-bottom) max(8px,env(safe-area-inset-left))}
+.tabs div{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr)}
+.tabs a{text-align:center;padding:13px 2px 11px;font-size:12px;font-weight:600;color:var(--mut);text-decoration:none;border-top:3px solid transparent}
+.tabs a.on{color:var(--acc);border-top-color:var(--acc)}
+[hidden]{display:none!important}
+</style>
+<body>
+<div class="w">
+  <h1>Mi Cartera PPI</h1>
+  <p class="m" id="st">Cargando tus datos de PPI…</p>
+  <section id="v-resumen" class="w" data-v="resumen"></section>
+  <section id="v-posiciones" class="w" data-v="posiciones" hidden></section>
+  <section id="v-vender" class="w" data-v="vender" hidden></section>
+  <section id="v-reparto" class="w" data-v="reparto" hidden></section>
+  <section id="v-consejos" class="w" data-v="consejos" hidden></section>
+</div>
+<nav class="tabs"><div>
+  <a href="#resumen" data-t="resumen">Resumen</a><a href="#posiciones" data-t="posiciones">Tenés</a><a href="#vender" data-t="vender">Vender</a><a href="#reparto" data-t="reparto">Reparto</a><a href="#consejos" data-t="consejos">Consejos</a>
+</div></nav>
+<script>
+(function(){
+'use strict';
+var KEY='cartera-ppi-v1';
+var $=function(id){return document.getElementById(id)};
+function esc(x){return String(x==null?'':x).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function nf(d){return new Intl.NumberFormat('es-AR',{minimumFractionDigits:d,maximumFractionDigits:d})}
+var n0=nf(0),n2=nf(2);
+function f0(n){return n==null||!isFinite(n)?'—':n0.format(n)}
+function f2(n){return n==null||!isFinite(n)?'—':n2.format(n)}
+function ars(n){return n==null||!isFinite(n)?'—':(n<0?'−':'')+'$'+n0.format(Math.abs(n))}
+function usd(n){return n==null||!isFinite(n)?'—':(n<0?'−':'')+'US$'+n2.format(Math.abs(n))}
+function sg(n,u){if(n==null||!isFinite(n))return '—';var r=Math.round(n*100)/100;return (r>0?'+':r<0?'−':'')+(u==='usd'?'US$'+n2.format(Math.abs(n)):u==='%'?n2.format(Math.abs(n))+'%':'$'+n0.format(Math.abs(n)))}
+function cls(n){return n>0.004?'g':n<-0.004?'l':''}
+function parse(s){if(s==null)return NaN;var t=String(s).trim().replace(/\s|\$/g,'');if(!t)return NaN;
+  if(t.indexOf(',')>=0&&t.indexOf('.')>=0)t=t.replace(/\./g,'').replace(',','.');else if(t.indexOf(',')>=0)t=t.replace(',','.');
+  else if(/^\d{1,3}(\.\d{3})+$/.test(t))t=t.replace(/\./g,'');var n=Number(t);return isFinite(n)?n:NaN}
+
+/* ---- estado guardado en este celular ---- */
+function defState(){return {budget:4000000,comPct:0,usd:null,obj:{SPY:50,MSFT:10,GOOGL:10,V:10,JNJ:10,KO:10},prices:{}}}
+var S=defState();
+try{var raw=localStorage.getItem(KEY);if(raw){var o=JSON.parse(raw);S=Object.assign(defState(),o)}}catch(e){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+
+/* ---- datos de PPI ---- */
+var D=null, items=[], cash=[], rateImplied=null, totalInst=0;
+function load(){
+  fetch('/api/posiciones').then(function(r){return r.json()}).then(function(d){
+    if(d.detail){$('st').textContent='Error: '+d.detail;return}
+    D=d;process();$('st').textContent='Datos reales de tu cuenta en PPI · '+new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+    renderAll();
+  }).catch(function(e){$('st').textContent='No pude cargar los datos: '+e});
+}
+function curOf(c){c=String(c||'').toLowerCase();return c.indexOf('dolar')>=0||c.indexOf('usd')>=0?'USD':'ARS'}
+function process(){
+  items=[];cash=[];rateImplied=null;totalInst=0;
+  (D.groupedInstruments||[]).forEach(function(g){
+    var gv=g.groupedValue||0;totalInst+=gv;
+    var sumAmt=0,allUsd=true;
+    (g.instruments||[]).forEach(function(i){sumAmt+=i.amount||0;if(curOf(i.currency)!=='USD')allUsd=false});
+    if(allUsd&&sumAmt>0&&!rateImplied)rateImplied=gv/sumAmt;
+  });
+  var rate=S.usd||rateImplied;
+  (D.groupedInstruments||[]).forEach(function(g){
+    (g.instruments||[]).forEach(function(i){
+      var cur=curOf(i.currency),p=i.ppc||{};
+      items.push({group:g.name||'',ticker:i.ticker,desc:i.description||'',cur:cur,qty:i.quantity||0,price:i.price,amount:i.amount||0,
+        ppc:p.ppcValue,ret:p.cumulativeReturn,retPct:p.cumulativeReturnPercentage,
+        ars:cur==='ARS'?(i.amount||0):(rate?(i.amount||0)*rate:null)});
+    });
+  });
+  (D.groupedAvailability||[]).forEach(function(g){
+    (g.availability||[]).forEach(function(a){if(a.settlement==='INMEDIATA'&&a.amount>0)cash.push({name:g.currency,cur:a.symbol==='USD'?'USD':'ARS',amount:a.amount})});
+  });
+}
+function rate(){return S.usd||rateImplied}
+function cashArs(){var r=rate(),t=0;cash.forEach(function(c){t+=c.cur==='ARS'?c.amount:(r?c.amount*r:0)});return t}
+function isCedear(i){return /cedear/i.test(i.group)}
+function totals(){
+  var r=rate(),res=0,cost=0,val=0;
+  items.forEach(function(i){
+    if(i.ret!=null){var v=i.cur==='USD'?(r?i.ret*r:0):i.ret;res+=v}
+    if(i.ars!=null){val+=i.ars}
+  });
+  var ca=cashArs();
+  return {res:res,val:val,cash:ca,patr:val+ca,rate:r};
+}
+
+/* ---- vistas ---- */
+function explain(t,b){return '<details><summary>'+esc(t)+'</summary><p>'+b+'</p></details>'}
+function renderResumen(){
+  if(!D){return}
+  var T=totals(),h='';
+  var v=Math.abs(T.res)<1?'Sin variación':(T.res>0?'Ganando':'Perdiendo');
+  h+='<div class="c"><p class="m">Hoy, con lo que compraste y todavía tenés</p><p class="verdict '+cls(T.res)+'">'+v+'</p><p class="big '+cls(T.res)+'">'+sg(T.res)+'</p><p class="m">Es la suma de la ganancia o pérdida de cada inversión, comparando el precio de hoy con lo que pagaste. Todavía no vendiste, así que es una ganancia “en papel”.</p></div>';
+  h+='<div class="c"><div class="r"><span>Tu plata total en PPI</span><b>'+ars(T.patr)+'</b></div><div class="r"><span>Invertida</span><b>'+ars(T.val)+'</b></div><div class="r"><span>Quieta (efectivo)</span><b>'+ars(T.cash)+'</b></div>'
+   +(T.rate?'<div class="r"><span class="m">Dólar usado para convertir</span><b>'+ars(T.rate)+'</b></div>':'<p class="note">No pude calcular el dólar. Cargalo en la pestaña Reparto para ver todo en pesos.</p>')+'</div>';
+  h+=explain('¿Cómo se calcula?','La ganancia sale de comparar el precio de hoy con el precio promedio al que compraste (esos datos los da PPI). Lo que está en dólares se pasa a pesos con el dólar de arriba, que se deduce de tus propias posiciones. No incluye impuestos.');
+  h+='<button class="btn p" id="copyBtn">Copiar resumen para consultar con Claude</button><p id="copyMsg" class="m" hidden></p><textarea id="copyBox" readonly hidden></textarea>';
+  h+='<button class="btn" id="reload">Actualizar datos</button>';
+  $('v-resumen').innerHTML=h;
+  $('copyBtn').onclick=copySummary;$('reload').onclick=function(){$('st').textContent='Actualizando…';load()};
+}
+function renderPos(){
+  if(!D)return;var h='<h2>Lo que tenés</h2>';
+  if(!items.length)h+='<p class="info">Todavía no tenés inversiones en la cuenta.</p>';
+  items.forEach(function(i){
+    var u=i.cur==='USD'?usd:ars;
+    h+='<div class="c"><div class="r"><span class="t">'+esc(i.ticker)+' <span class="m">'+esc(i.group)+'</span></span><b>'+u(i.amount)+'</b></div><p class="m">'+esc(i.desc)+'</p>'
+     +'<div class="r"><span>Cantidad</span><b>'+f0(i.qty)+'</b></div><div class="r"><span>Precio hoy</span><b>'+f2(i.price)+'</b></div>'
+     +'<div class="r"><span>Precio promedio de compra</span><b>'+f2(i.ppc)+'</b></div>'
+     +(i.ret!=null?'<div class="r"><span>Ganás o perdés</span><b class="'+cls(i.ret)+'">'+sg(i.ret,i.cur==='USD'?'usd':'')+' ('+sg(i.retPct,'%')+')</b></div>':'')
+     +(i.ars!=null&&i.cur==='USD'?'<div class="r"><span class="m">Equivale a</span><b>'+ars(i.ars)+'</b></div>':'')+'</div>';
+    if(/^ON|obligac/i.test(i.group))h+=explain('¿Qué es una obligación negociable (ON)?','Es un préstamo que le hacés a una empresa. A cambio te paga intereses cada tanto y te devuelve el capital al vencimiento. Su precio sube y baja mientras tanto. Si la vendés antes de que venza, podés ganar o perder según el precio de ese día.');
+  });
+  h+='<h2>Efectivo</h2><div class="c">';
+  if(!cash.length)h+='<p class="m">No tenés efectivo disponible.</p>';
+  cash.forEach(function(c){h+='<div class="r"><span>'+esc(c.name)+'</span><b>'+(c.cur==='USD'?usd(c.amount):ars(c.amount))+'</b></div>'});
+  h+='</div>'+explain('¿Por qué hay dos dólares?','MEP y CCL son dos formas legales de tener dólares a través de la bolsa. Para vos son parecidos: el MEP es dólar billete y el CCL es dólar divisa. Con ambos podés comprar CEDEARs si el instrumento lo permite.');
+  $('v-posiciones').innerHTML=h;
+}
+function renderVender(){
+  if(!D)return;var held=items.filter(function(i){return i.qty>0});
+  var h='<h2>¿Y si vendo?</h2><p class="m">Probá a qué precio vendés y mirá cuánto te queda después de comisiones.</p>';
+  if(!held.length){$('v-vender').innerHTML=h+'<p class="info">No tenés nada para simular.</p>';return}
+  h+='<div class="c"><label>Qué vendés<select id="sT">'+held.map(function(i,k){return '<option value="'+k+'">'+esc(i.ticker)+'</option>'}).join('')+'</select></label>'
+   +'<div class="two"><label>Cantidad<input id="sQ" inputmode="decimal"></label><label>Precio de venta<input id="sP" inputmode="decimal"></label></div>'
+   +'<label>Comisión de PPI (%)<input id="sC" inputmode="decimal" value="'+(S.comPct||'')+'" placeholder="0"></label><div id="sOut" class="w" style="gap:8px"></div></div>';
+  h+=explain('¿Qué es el precio de equilibrio?','Es el precio mínimo al que tenés que vender para no perder plata una vez descontadas las comisiones de compra y de venta.');
+  $('v-vender').innerHTML=h;
+  function cur(){return held[Number($('sT').value)]}
+  function def(){var i=cur();$('sQ').value=i.qty;$('sP').value=i.price!=null?i.price:''}
+  function calc(){
+    var i=cur(),q=Math.min(parse($('sQ').value),i.qty),p=parse($('sP').value),c=parse($('sC').value);if(!(c>=0))c=0;
+    S.comPct=c;save();
+    if(!(q>0)||!(p>0)){$('sOut').innerHTML='<p class="m">Escribí cantidad y precio.</p>';return}
+    var gross=q*p,com=gross*c/100,net=gross-com,cost=(i.ppc||0)*q,pl=net-cost,eq=(i.ppc||0)/(1-c/100);
+    var u=i.cur==='USD'?usd:ars,sgu=i.cur==='USD'?'usd':'';
+    $('sOut').innerHTML='<p class="m">Si vendés '+f0(q)+' de '+esc(i.ticker)+' a '+f2(p)+', ganás o perdés</p><p class="big '+cls(pl)+'">'+sg(pl,sgu)+'</p>'
+     +'<div class="r"><span>Cobrás</span><b>'+u(net)+'</b></div><div class="r"><span>Comisión</span><b>'+u(com)+'</b></div><div class="r"><span>Te costó</span><b>'+u(cost)+'</b></div><div class="r"><span>Precio de equilibrio</span><b>'+f2(eq)+'</b></div>'
+     +(c===0?'<p class="note">Cargá la comisión de PPI para que el cálculo sea exacto.</p>':'')+'<p class="m">No incluye impuestos.</p>';
+  }
+  $('sT').onchange=function(){def();calc()};$('sQ').oninput=calc;$('sP').oninput=calc;$('sC').oninput=calc;def();calc();
+}
+function renderReparto(){
+  if(!D)return;
+  var ced={};items.forEach(function(i){if(isCedear(i))ced[i.ticker.toUpperCase()]=i});
+  var h='<h2>Tu reparto objetivo</h2><p class="m">Cuánto querés tener en cada CEDEAR. Es un ejemplo para arrancar: cambialo cuando quieras.</p>';
+  h+='<div class="c"><label>Plata a invertir ($)<input id="rB" inputmode="decimal" value="'+f0(S.budget)+'"></label><label>Dólar para convertir ($, opcional)<input id="rU" inputmode="decimal" value="'+(S.usd||'')+'" placeholder="'+(rateImplied?f0(rateImplied):'')+'"></label></div>';
+  var sum=0,inv=0;Object.keys(S.obj).forEach(function(t){sum+=S.obj[t]||0});
+  Object.keys(ced).forEach(function(t){inv+=ced[t].ars||0});
+  h+='<p class="m">Tenés invertido en CEDEARs: <b>'+ars(inv)+'</b> de '+ars(S.budget)+'.</p>';
+  Object.keys(S.obj).forEach(function(t){
+    var goal=S.budget*(S.obj[t]||0)/100,i=ced[t],have=i?(i.ars||0):0,falta=goal-have,price=i?i.price:S.prices[t];
+    var units=(price>0&&falta>0)?Math.floor(falta/price):null;
+    h+='<div class="c"><div class="r"><span class="t">'+esc(t)+'</span><label style="flex-direction:row;align-items:center;gap:6px;width:110px"><input data-o="'+esc(t)+'" inputmode="decimal" value="'+f2(S.obj[t]).replace(/,00$/,'')+'"><span>%</span></label></div>'
+     +'<div class="bar"><i style="width:'+(goal>0?Math.min(100,have/goal*100):0)+'%"></i></div>'
+     +'<div class="r"><span class="m">Invertido</span><b>'+ars(have)+' de '+ars(goal)+'</b></div>'
+     +'<div class="r"><span>'+(falta>1?'Te falta':falta<-1?'Te pasaste':'Completo')+'</span><b>'+(Math.abs(falta)>1?ars(Math.abs(falta)):'')+(units!=null?' · unas '+f0(units)+' u':'')+'</b></div>'
+     +(price>0?'<p class="m">Precio de referencia: '+f2(price)+'</p>':'<p class="m">Sin precio todavía.</p>')+'</div>';
+  });
+  h+=(Math.abs(sum-100)<0.05?'<p class="m">Los porcentajes suman 100%.</p>':'<p class="note">Los porcentajes suman '+f2(sum)+'%. Tendrían que sumar 100%.</p>');
+  h+='<button class="btn" id="rP">Buscar precios de PPI</button><p class="m" id="rPm"></p>';
+  h+='<div class="c"><h3>Agregar un CEDEAR</h3><div class="two"><label>Código<input id="aT" maxlength="12" autocapitalize="characters" placeholder="NVDA"></label><label>% objetivo<input id="aP" inputmode="decimal" placeholder="0"></label></div><button class="btn" id="aB">Agregar</button></div>';
+  h+='<p class="m">El reparto inicial es un ejemplo, no una recomendación personalizada.</p>';
+  $('v-reparto').innerHTML=h;
+  $('rB').onchange=function(){var v=parse(this.value);if(v>0){S.budget=v;save()}renderReparto()};
+  $('rU').onchange=function(){var v=parse(this.value);S.usd=v>0?v:null;save();process();renderAll()};
+  document.querySelectorAll('[data-o]').forEach(function(el){el.onchange=function(){var v=parse(this.value);if(!(v>=0))v=0;if(v>100)v=100;S.obj[this.dataset.o]=v;save();renderReparto();renderConsejos()}});
+  $('aB').onclick=function(){var t=$('aT').value.toUpperCase().replace(/[^A-Z0-9.\-]/g,'');if(!t)return;var p=parse($('aP').value);S.obj[t]=p>=0?p:0;save();renderReparto()};
+  $('rP').onclick=function(){
+    var ts=Object.keys(S.obj).filter(function(t){return !ced[t]});var m=$('rPm'),k=0,ok=0;
+    if(!ts.length){m.textContent='Ya tenés precio de todos.';return}
+    m.textContent='Buscando…';
+    (function next(){
+      if(k>=ts.length){m.textContent=ok?'Listo, '+ok+' precios cargados.':'No pude traer precios de PPI. Cargalos a mano en tu cuenta.';save();renderReparto();return}
+      var t=ts[k++];
+      fetch('/api/precio/'+encodeURIComponent(t)).then(function(r){return r.json()}).then(function(d){
+        var p=d&&(d.price!=null?d.price:d.last);if(p>0){S.prices[t]=p;ok++}
+      }).catch(function(){}).then(next);
+    })();
+  };
+}
+function advice(){
+  var out=[],T=totals(),ced=items.filter(isCedear);
+  if(!D)return out;
+  if(!ced.length)out.push(['info','Todavía no tenés CEDEARs','Tu plan era invertir en CEDEARs, y por ahora no hay ninguno en la cuenta. En la pestaña Reparto ves cuánto te falta comprar de cada uno. Antes de operar, revisá la comisión de PPI.']);
+  if(T.patr>0){
+    items.forEach(function(i){var sh=i.ars!=null?i.ars/T.patr*100:0;if(sh>=40)out.push(['warn',esc(i.ticker)+' es el '+f0(sh)+'% de tu plata','Tenés una parte muy grande en una sola inversión. Si esa inversión baja, tu cartera lo siente mucho. Repartir en varias ayuda a que una sola no pese tanto.'])});
+    var cs=T.cash/T.patr*100;
+    if(cs>=30)out.push(['info','El '+f0(cs)+'% de tu plata está quieta','Tenés bastante efectivo sin invertir. No es malo si es a propósito, por ejemplo para esperar un buen momento, pero esa plata no genera ganancia por sí sola.']);
+    var usdShare=0;items.forEach(function(i){if(i.cur==='USD'&&i.ars!=null)usdShare+=i.ars});cash.forEach(function(c){if(c.cur==='USD'&&T.rate)usdShare+=c.amount*T.rate});
+    var us=usdShare/T.patr*100;
+    if(us>=50)out.push(['info','Casi todo está en dólares ('+f0(us)+'%)','Tu resultado en pesos depende de cómo se mueva el dólar, además de las inversiones. Si el dólar baja, tus pesos valen menos aunque la inversión no cambie.']);
+  }
+  var tot=0;ced.forEach(function(i){tot+=i.ars||0});
+  if(ced.length&&tot>=0.8*S.budget){
+    Object.keys(S.obj).forEach(function(t){var i=items.filter(function(x){return isCedear(x)&&x.ticker.toUpperCase()===t})[0];var sh=i&&tot?(i.ars||0)/tot*100:0;var d=sh-(S.obj[t]||0);
+      if(Math.abs(d)>=5)out.push(['info',esc(t)+' se corrió de tu objetivo','Hoy es el '+f0(sh)+'% de tus CEDEARs y querías '+f0(S.obj[t])+'%. Podés comprar de los que quedaron cortos para acomodar, sin necesidad de vender.'])});
+  }
+  if(!(S.comPct>0))out.push(['warn','Falta cargar la comisión de PPI','Sin ese dato, el simulador de venta no puede decirte si ganás o perdés después de comisiones. Cargala en la pestaña Vender.']);
+  if(ced.length)out.push(['info','Sobre los dividendos de los CEDEARs','Para cobrar un dividendo tenés que tener el CEDEAR antes de la fecha de corte (al menos 48 horas antes). En acciones de Estados Unidos se retiene el 30%, y después tributa en Ganancias según tu situación.']);
+  return out;
+}
+function renderConsejos(){
+  if(!D)return;var a=advice(),h='<h2>Observaciones sobre tu cartera</h2><p class="m">Son avisos automáticos con tus números. No son una recomendación personalizada de inversión.</p>';
+  if(!a.length)h+='<p class="info">Por ahora no hay nada para marcar.</p>';
+  a.forEach(function(x){h+='<div class="'+(x[0]==='warn'?'note':'info')+'"><b>'+x[1]+'</b><br>'+x[2]+'</div>'});
+  h+='<div class="c"><h3>Noticias y riesgos</h3><p class="m">Esta app no lee noticias. Copiá el resumen y pegalo en un chat con Claude para que busque novedades de cada inversión.</p><button class="btn p" id="copyBtn2">Copiar resumen para Claude</button><p id="copyMsg2" class="m" hidden></p><textarea id="copyBox2" readonly hidden></textarea></div>';
+  $('v-consejos').innerHTML=h;$('copyBtn2').onclick=function(){copySummary(2)};
+}
+function summary(){
+  var T=totals(),L=['Mi cartera en PPI ('+new Date().toLocaleDateString('es-AR')+'):'];
+  items.forEach(function(i){L.push('- '+i.ticker+(i.desc?' ('+i.desc+')':'')+': '+f0(i.qty)+' u, precio hoy '+f2(i.price)+', promedio '+f2(i.ppc)+(i.ret!=null?', resultado '+sg(i.ret,i.cur==='USD'?'usd':'')+' ('+sg(i.retPct,'%')+')':''))});
+  cash.forEach(function(c){L.push('- Efectivo '+c.name+': '+(c.cur==='USD'?usd(c.amount):ars(c.amount)))});
+  L.push('Resultado total estimado: '+sg(T.res)+'. Plata total: '+ars(T.patr)+'.');
+  var o=Object.keys(S.obj).filter(function(t){return S.obj[t]>0}).map(function(t){return t+' '+S.obj[t]+'%'});
+  if(o.length)L.push('Reparto objetivo en CEDEARs ($'+f0(S.budget)+'): '+o.join(', ')+'.');
+  L.push('','Buscá noticias actuales y contame novedades y riesgos de cada una de estas inversiones y del dólar, y cómo podrían afectar mi cartera. No quiero una orden de comprar o vender: quiero entender el panorama.');
+  return L.join('\n');
+}
+function copySummary(k){
+  var sfx=k===2?'2':'',txt=summary(),box=$('copyBox'+sfx),msg=$('copyMsg'+sfx);msg.hidden=false;
+  function fb(){box.value=txt;box.hidden=false;box.focus();box.select();msg.textContent='Seleccioná el texto de abajo y copialo.'}
+  try{navigator.clipboard.writeText(txt).then(function(){box.hidden=true;msg.textContent='Copiado. Pegalo en un chat con Claude.'},fb)}catch(e){fb()}
+}
+function renderAll(){renderResumen();renderPos();renderVender();renderReparto();renderConsejos()}
+function route(){
+  var h=location.hash.slice(1);if(['resumen','posiciones','vender','reparto','consejos'].indexOf(h)<0)h='resumen';
+  document.querySelectorAll('[data-v]').forEach(function(s){s.hidden=s.dataset.v!==h});
+  document.querySelectorAll('[data-t]').forEach(function(a){a.className=a.dataset.t===h?'on':''});
+  window.scrollTo(0,0);
+}
+window.addEventListener('hashchange',route);route();load();
+})();
+</script>
+</html>
