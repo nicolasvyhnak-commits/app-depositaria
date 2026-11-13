@@ -138,6 +138,17 @@ def precio(ticker: str):
     except Exception as e:
         raise HTTPException(502, "PPI respondió con error: " + safe(e))
 
+@app.get("/api/analisis/{ticker}", dependencies=[Depends(auth)])
+def analisis(ticker: str):
+    if not re.fullmatch(r"[A-Za-z0-9.\-]{1,10}", ticker):
+        raise HTTPException(400, "Código inválido")
+    try:
+        import analisis as an
+        return an.analizar(ticker)
+    except Exception as e:
+        log.error("analisis %s: %s", ticker, safe(e))
+        raise HTTPException(502, "No pude traer datos de " + ticker.upper() + " ahora (" + type(e).__name__ + "). Probá de nuevo en un rato.")
+
 LOGIN = """<!doctype html><html lang=es><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name=apple-mobile-web-app-capable content=yes><meta name=mobile-web-app-capable content=yes><meta name=apple-mobile-web-app-title content="Mi Cartera">
 <link rel=manifest href=/manifest.webmanifest><link rel=apple-touch-icon href=/icon.png><meta name=theme-color content="#1B4FD6"><title>Mi Cartera PPI</title>
