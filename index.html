@@ -407,10 +407,11 @@ function renderAnalisis(){
   var h='<h2>Análisis</h2><p class="m">Mira la acción de EE.UU. que está detrás de cada CEDEAR (datos públicos de Yahoo Finance, pueden venir con demora). Tocá cada indicador para ver qué significa.</p>';
   h+='<div class="note">Describe lo que pasó y cómo está la empresa. No predice el futuro ni te dice qué comprar o vender, y no se entera de noticias nuevas como una renuncia o una demanda.</div>';
   h+=S.watch.map(aCard).join('');
-  h+='<div class="c"><h3>Agregar acción</h3><div class="two"><label>Código de EE.UU. (ej: TSLA)<input id="aNew" autocapitalize="characters" autocomplete="off" placeholder="TSLA"></label><button class="btn p" id="aAdd" style="align-self:end">Agregar</button></div><button class="btn" id="aRef">Actualizar datos</button></div>';
+  h+='<div class="c"><h3>Agregar acción</h3><div class="two"><label>Código de EE.UU. (ej: TSLA)<input id="aNew" autocapitalize="characters" autocomplete="off" placeholder="TSLA"></label><button class="btn p" id="aAdd" style="align-self:end">Agregar</button></div><div class="two"><button class="btn" id="aRef">Actualizar datos</button><button class="btn" id="aDef">Restaurar lista inicial</button></div></div>';
   h+='<p class="m">Esto es información, no asesoramiento financiero.</p>';
   $('v-analisis').innerHTML=h;
   $('aAdd').onclick=function(){var v=($('aNew').value||'').trim().toUpperCase();if(/^[A-Z.\-]{1,10}$/.test(v)&&S.watch.indexOf(v)<0){S.watch.push(v);save();renderAnalisis();loadAnalisis()}};
+  $('aDef').onclick=function(){['NVDA','MU','MSFT','GOOGL','AMD'].forEach(function(t){if(S.watch.indexOf(t)<0)S.watch.push(t)});save();renderAnalisis();loadAnalisis()};
   $('aRef').onclick=function(){A={};loadAnalisis(true)};
   document.querySelectorAll('[data-rm]').forEach(function(b){b.onclick=function(){var t=this.dataset.rm;S.watch=S.watch.filter(function(x){return x!==t});delete A[t];save();renderAnalisis()}});
 }

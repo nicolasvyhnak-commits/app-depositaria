@@ -34,16 +34,44 @@ def _session(force=False):
             _sess.update(opener=op, crumb=crumb, t=time.time())
         return _sess["opener"], _sess["crumb"]
 
+def _yahoo_history(t):
+    last = None
+    for host in ("query1", "query2"):
+        url = f"https://{host}.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(t)}?range=2y&interval=1d&includePrePost=false"
+        try:
+            res = json.loads(_get(_opener(), url))["chart"]["result"][0]
+            q = res["indicators"]["quote"][0]
+            rows = [(ts, c, v) for ts, c, v in zip(res["timestamp"], q["close"], q.get("volume") or [None] * len(q["close"])) if c is not None]
+            meta = res.get("meta", {})
+            return {"ts": [r[0] for r in rows], "close": [r[1] for r in rows], "vol": [r[2] or 0 for r in rows],
+                    "name": meta.get("longName") or meta.get("shortName") or t, "price": meta.get("regularMarketPrice"),
+                    "ccy": meta.get("currency", "USD"), "src": "yahoo"}
+        except Exception as e:
+            last = e
+    raise last
+
+def _stooq_history(t):
+    sym = t.lower().replace(".", "-") + ".us"
+    raw = _get(_opener(), f"https://stooq.com/q/d/l/?s={urllib.parse.quote(sym)}&i=d")
+    lines = [l for l in raw.strip().splitlines() if l]
+    if not lines or not lines[0].lower().startswith("date,open"):
+        raise RuntimeError("Stooq no devolvió datos")
+    ts, c, v = [], [], []
+    for l in lines[1:]:
+        p = l.split(",")
+        if len(p) < 6 or p[4] in ("", "null"): continue
+        ts.append(int(time.mktime(time.strptime(p[0], "%Y-%m-%d")))); c.append(float(p[4])); v.append(float(p[5] or 0))
+    ts, c, v = ts[-520:], c[-520:], v[-520:]
+    return {"ts": ts, "close": c, "vol": v, "name": t, "price": c[-1], "ccy": "USD", "src": "stooq"}
+
 def fetch_history(t):
-    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(t)}?range=2y&interval=1d&includePrePost=false"
-    raw = _get(_opener(), url)
-    res = json.loads(raw)["chart"]["result"][0]
-    q = res["indicators"]["quote"][0]
-    rows = [(ts, c, v) for ts, c, v in zip(res["timestamp"], q["close"], q.get("volume") or [None] * len(q["close"])) if c is not None]
-    meta = res.get("meta", {})
-    return {"ts": [r[0] for r in rows], "close": [r[1] for r in rows], "vol": [r[2] or 0 for r in rows],
-            "name": meta.get("longName") or meta.get("shortName") or t, "price": meta.get("regularMarketPrice"),
-            "ccy": meta.get("currency", "USD")}
+    errs = []
+    for fn in (_yahoo_history, _stooq_history):
+        try:
+            return fn(t)
+        except Exception as e:
+            errs.append(f"{fn.__name__[1:-8]}: {type(e).__name__} {e}"[:120])
+    raise RuntimeError(" | ".join(errs))
 
 def fetch_fundamentals(t):
     mods = "financialData,defaultKeyStatistics,summaryDetail,calendarEvents"

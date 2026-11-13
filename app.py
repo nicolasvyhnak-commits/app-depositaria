@@ -149,6 +149,25 @@ def analisis(ticker: str):
         log.error("analisis %s: %s", ticker, safe(e))
         raise HTTPException(502, "No pude traer datos de " + ticker.upper() + " ahora (" + type(e).__name__ + "). Probá de nuevo en un rato.")
 
+def _probe():
+    """Al arrancar, anota en el log qué fuentes de datos responden desde este servidor."""
+    time.sleep(5)
+    try:
+        import analisis as an
+        for nombre, fn in (("yahoo-precios", an._yahoo_history), ("stooq-precios", an._stooq_history)):
+            try:
+                h = fn("NVDA"); log.info("PROBE %s OK (%d ruedas, ultimo %.2f)", nombre, len(h["close"]), h["close"][-1])
+            except Exception as e:
+                log.info("PROBE %s FALLA: %s", nombre, safe(e))
+        try:
+            f = an.fetch_fundamentals("NVDA"); log.info("PROBE yahoo-fundamentales OK (%s)", {k: v for k, v in f.items() if v is not None and k in ("fpe", "margin", "rev_g")})
+        except Exception as e:
+            log.info("PROBE yahoo-fundamentales FALLA: %s", safe(e))
+    except Exception as e:
+        log.info("PROBE error: %s", safe(e))
+
+threading.Thread(target=_probe, daemon=True).start()
+
 LOGIN = """<!doctype html><html lang=es><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name=apple-mobile-web-app-capable content=yes><meta name=mobile-web-app-capable content=yes><meta name=apple-mobile-web-app-title content="Mi Cartera">
 <link rel=manifest href=/manifest.webmanifest><link rel=apple-touch-icon href=/icon.png><meta name=theme-color content="#1B4FD6"><title>Mi Cartera PPI</title>
