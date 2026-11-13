@@ -147,7 +147,7 @@ def analisis(ticker: str):
         return an.analizar(ticker)
     except Exception as e:
         log.error("analisis %s: %s", ticker, safe(e))
-        raise HTTPException(502, "No pude traer datos de " + ticker.upper() + " ahora (" + type(e).__name__ + "). Probá de nuevo en un rato.")
+        raise HTTPException(502, "No pude traer datos de " + ticker.upper() + " ahora (" + type(e).__name__ + "). Si sigue pasando, avisale a Claude.")
 
 def _probe():
     """Al arrancar, anota en el log qué fuentes de datos responden desde este servidor."""

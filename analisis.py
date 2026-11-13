@@ -299,10 +299,10 @@ def fund_lights(f, price):
     out = []
     rg = f.get("rev_g")
     if rg is not None:
-        out.append(light("Crecimiento de ventas", _p(rg), "g" if rg > 0.15 else ("y" if rg > 0.03 else "r"), "Cuánto crecieron las ventas contra el mismo trimestre del año anterior."))
+        out.append(light("Crecimiento de ventas", _p(rg), "g" if rg > 0.15 else ("y" if rg > 0.03 else "r"), "Cuánto crecieron las ventas respecto del período anterior (último año fiscal o trimestre contra el mismo del año pasado, según la fuente)."))
     eg = f.get("earn_g")
     if eg is not None:
-        out.append(light("Crecimiento de ganancias", _p(eg), "g" if eg > 0.15 else ("y" if eg > 0 else "r"), "Cuánto crecieron las ganancias contra el mismo trimestre del año anterior."))
+        out.append(light("Crecimiento de ganancias", _p(eg), "g" if eg > 0.15 else ("y" if eg > 0 else "r"), "Cuánto crecieron las ganancias respecto del período anterior (último año fiscal o trimestre contra el mismo del año pasado, según la fuente)."))
     mg = f.get("margin")
     if mg is not None:
         out.append(light("Margen de ganancia", _p(mg).replace("+", ""), "g" if mg > 0.20 else ("y" if mg > 0.08 else "r"), "De cada 100 dólares que vende, cuántos quedan como ganancia."))
