@@ -1,9 +1,9 @@
 """Análisis técnico y fundamental de una acción de EE.UU. (el subyacente de un CEDEAR).
 Solo lectura de datos públicos (Yahoo Finance). No opera ni da órdenes."""
-import json, math, time, threading, urllib.request, urllib.error, urllib.parse, http.cookiejar
+import json, math, os, time, threading, urllib.request, urllib.error, urllib.parse, http.cookiejar
 
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-TTL = 15 * 60
+TTL = 45 * 60
 _cache = {}
 _lock = threading.Lock()
 _sess = {"opener": None, "crumb": None, "t": 0}
@@ -64,16 +64,93 @@ def _stooq_history(t):
     ts, c, v = ts[-520:], c[-520:], v[-520:]
     return {"ts": ts, "close": c, "vol": v, "name": t, "price": c[-1], "ccy": "USD", "src": "stooq"}
 
+
+# ---------- Financial Modeling Prep (con clave gratuita en FMP_API_KEY) ----------
+def _fmp_key():
+    return os.environ.get("FMP_API_KEY", "").strip()
+
+def _fmp(path, **params):
+    q = dict(params); q["apikey"] = _fmp_key()
+    raw = _get(_opener(), "https://financialmodelingprep.com/stable/" + path + "?" + urllib.parse.urlencode(q), timeout=12)
+    d = json.loads(raw)
+    if isinstance(d, dict) and (d.get("Error Message") or d.get("error")):
+        raise RuntimeError(str(d.get("Error Message") or d.get("error"))[:100])
+    return d
+
+def _pick(d, *names):
+    for n in names:
+        v = d.get(n)
+        if isinstance(v, (int, float)) and math.isfinite(v): return v
+    return None
+
+def _fmp_history(t):
+    if not _fmp_key(): raise RuntimeError("Falta FMP_API_KEY")
+    desde = time.strftime("%Y-%m-%d", time.gmtime(time.time() - 800 * 86400))
+    rows = _fmp("historical-price-eod/full", symbol=t, **{"from": desde})
+    if not isinstance(rows, list) or len(rows) < 60: raise RuntimeError("FMP sin datos")
+    rows = sorted(rows, key=lambda r: r["date"])
+    ts = [int(time.mktime(time.strptime(r["date"], "%Y-%m-%d"))) for r in rows]
+    c = [float(r["close"]) for r in rows]; v = [float(r.get("volume") or 0) for r in rows]
+    name = t
+    try:
+        pr = _fmp("profile", symbol=t)
+        if pr: name = pr[0].get("companyName") or t
+    except Exception:
+        pass
+    return {"ts": ts, "close": c, "vol": v, "name": name, "price": c[-1], "ccy": "USD", "src": "fmp"}
+
+def _fmp_fundamentals(t):
+    if not _fmp_key(): raise RuntimeError("Falta FMP_API_KEY")
+    out = {k: None for k in ("pe", "fpe", "rev_g", "earn_g", "margin", "gross", "roe", "d2e", "cash", "debt", "rec", "target", "n_an", "mcap", "earn_ts")}
+    ok = 0
+    try:
+        r = _fmp("ratios-ttm", symbol=t)[0]; ok += 1
+        out["pe"] = _pick(r, "priceToEarningsRatioTTM", "peRatioTTM")
+        out["margin"] = _pick(r, "netProfitMarginTTM")
+        out["gross"] = _pick(r, "grossProfitMarginTTM")
+        d = _pick(r, "debtToEquityRatioTTM", "debtEquityRatioTTM")
+        out["d2e"] = d * 100 if d is not None else None
+    except Exception:
+        pass
+    try:
+        inc = _fmp("income-statement", symbol=t, limit=2); ok += 1
+        if len(inc) >= 2:
+            if inc[1].get("revenue"): out["rev_g"] = inc[0]["revenue"] / inc[1]["revenue"] - 1
+            a, b = inc[0].get("netIncome"), inc[1].get("netIncome")
+            if a is not None and b and b > 0: out["earn_g"] = a / b - 1
+    except Exception:
+        pass
+    try:
+        bs = _fmp("balance-sheet-statement", symbol=t, limit=1)[0]; ok += 1
+        out["cash"] = _pick(bs, "cashAndShortTermInvestments", "cashAndCashEquivalents"); out["debt"] = _pick(bs, "totalDebt")
+    except Exception:
+        pass
+    try:
+        pt = _fmp("price-target-consensus", symbol=t)[0]; ok += 1
+        out["target"] = _pick(pt, "targetConsensus", "targetMedian")
+    except Exception:
+        pass
+    if not ok: raise RuntimeError("FMP no devolvió fundamentales")
+    return out
+
 def fetch_history(t):
     errs = []
-    for fn in (_yahoo_history, _stooq_history):
+    for fn in ((_fmp_history,) if _fmp_key() else ()) + (_yahoo_history, _stooq_history):
         try:
             return fn(t)
         except Exception as e:
-            errs.append(f"{fn.__name__[1:-8]}: {type(e).__name__} {e}"[:120])
+            errs.append(f"{getattr(fn, '__name__', '?').strip('_').split('_')[0]}: {type(e).__name__} {e}"[:120])
     raise RuntimeError(" | ".join(errs))
 
 def fetch_fundamentals(t):
+    if _fmp_key():
+        try:
+            return _fmp_fundamentals(t)
+        except Exception:
+            pass
+    return _yahoo_fundamentals(t)
+
+def _yahoo_fundamentals(t):
     mods = "financialData,defaultKeyStatistics,summaryDetail,calendarEvents"
     for intento in (0, 1):
         op, crumb = _session(force=bool(intento))

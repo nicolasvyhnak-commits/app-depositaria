@@ -159,8 +159,14 @@ def _probe():
                 h = fn("NVDA"); log.info("PROBE %s OK (%d ruedas, ultimo %.2f)", nombre, len(h["close"]), h["close"][-1])
             except Exception as e:
                 log.info("PROBE %s FALLA: %s", nombre, safe(e))
+        if an._fmp_key():
+            for nombre, fn in (("fmp-precios", an._fmp_history), ("fmp-fundamentales", an._fmp_fundamentals)):
+                try:
+                    r = fn("NVDA"); log.info("PROBE %s OK %s", nombre, {k: v for k, v in r.items() if k not in ("ts", "close", "vol")} if "close" in r else {k: v for k, v in r.items() if v is not None})
+                except Exception as e:
+                    log.info("PROBE %s FALLA: %s", nombre, safe(e))
         try:
-            f = an.fetch_fundamentals("NVDA"); log.info("PROBE yahoo-fundamentales OK (%s)", {k: v for k, v in f.items() if v is not None and k in ("fpe", "margin", "rev_g")})
+            f = an.fetch_fundamentals("NVDA"); log.info("PROBE fundamentales OK (%s)", {k: v for k, v in f.items() if v is not None and k in ("fpe", "margin", "rev_g")})
         except Exception as e:
             log.info("PROBE yahoo-fundamentales FALLA: %s", safe(e))
     except Exception as e:
